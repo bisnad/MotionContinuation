@@ -1,6 +1,6 @@
 """
-same as rrn_v2.py 
-but loss calculated after iterating through target sequence on the entire generated sequence
+Simple sequence continuation model based on an LSTM neural network
+This version works with motion capture data that stores joint rotations and recorded in BVH or FBX format
 """
 
 import torch
@@ -17,6 +17,7 @@ import math
 
 from common import utils
 from common import bvh_tools as bvh
+from common import fbx_tools as fbx
 from common import mocap_tools as mocap
 from common.quaternion import qmul, qrot, qnormalize_np, slerp
 from common.pose_renderer import PoseRenderer
@@ -32,62 +33,30 @@ print('Using {} device'.format(device))
 Mocap Data
 """
 
-# mocap settings
+# important: the skeleton needs to be identical in all mocap recordings
 
 """
-mocap_file_path = "../../../../../../Data/mocap/stocos/solos/"
-mocap_files = ["Muriel_Take1.bvh",
-               "Muriel_Take2.bvh",
-               "Muriel_Take3.bvh",
-               "Muriel_Take4.bvh",
-               "Muriel_Take6.bvh",
-               "Muriel_Take7.bvh" ]
-
-mocap_valid_frame_ranges = [ [ [ 0, 16709 ] ],
-                              [ [ 0, 11540 ] ],
-                              [ [ 0, 12373 ] ],
-                              [ [ 0, 5005 ] ],
-                              [ [ 0, 27628 ] ],
-                              [ [ 0, 12380 ] ] ]
+mocap_file_path = "D:/Data/mocap/Daniel/Zed/fbx/"
+mocap_files = ["daniel_zed_solo1.fbx"]
+mocap_valid_frame_ranges = [ [ [ 0, 9100 ] ] ]
+mocap_pos_scale = 1.0
+mocap_fps = 30
 """
 
-mocap_file_path = "../../../../../../Data/mocap/stocos/solos/"
-mocap_files = ["Muriel_Take1.bvh" ]
-mocap_valid_frame_ranges = [ [ [ 0, 16709 ] ] ]
-
-joint_loss_weights = [ 
-    1.0, # Hips
-    1.0, # RightUpLeg
-    1.0, # RightLeg
-    1.0, # RightFoot
-    1.0, # RightToeBase
-    1.0, # RightToeBase_Nub
-    1.0, # LeftUpLeg
-    1.0, # LeftLeg
-    1.0, # LeftFoot
-    1.0, # LeftToeBase
-    1.0, # LeftToeBase_Nub
-    1.0, # Spine
-    1.0, # Spine1
-    1.0, # Spine2
-    1.0, # Spine3
-    1.0, # LeftShoulder
-    1.0, # LeftArm
-    1.0, # LeftForeArm
-    1.0, # LeftHand
-    1.0, # LeftHand_Nub
-    1.0, # RightShoulder
-    1.0, # RightArm
-    1.0, # RightForeArm
-    1.0, # RightHand
-    1.0, # RightHand_Nub
-    1.0, # Neck
-    1.0, # Head
-    1.0 # Head_Nub
-    ]
-
+mocap_file_path = "D:/Data/mocap/stocos/Duets/Amsterdam_2024/fbx_50hz"
+mocap_files = [ "Sherise_Take4_v2.fbx" ]
+mocap_valid_frame_ranges = [ [ [ 490, 30679] ] ]
+mocap_pos_scale = 1.0
 mocap_fps = 50
 
+
+"""
+mocap_file_path = "D:/Data/mocap/stocos/Duets/Amsterdam_2024/fbx_30hz"
+mocap_files = [ "Sherise_Take4.fbx" ]
+mocap_valid_frame_ranges = [ [ [ 150, 18000] ] ]
+mocap_pos_scale = 1.0
+mocap_fps = 30
+"""
 
 """
 Model Settings
@@ -120,6 +89,50 @@ model_save_interval = 10
 epochs = 200
 save_history = True
 
+
+# zed body34 specific joint loss weights
+# todo: this information should be stored in config files
+joint_loss_weights = [
+    1.0, # PELVIS
+    1.0, # NAVAL SPINE
+    1.0, # CHEST SPINE
+    1.0, # RIGHT CLAVICLE
+    1.0, # RIGHT SHOULDER
+    1.0, # RIGHT ELBOW
+    1.0, # RIGHT WRIST
+    1.0, # RIGHT HAND
+    0.1, # RIGHT HANDTIP
+    0.1, # RIGHT THUMB
+    1.0, # NECK
+    1.0, # HEAD
+    0.1, # NOSE
+    0.1, # LEFT EYE
+    0.1, # LEFT EAR
+    0.1, # RIGHT EYE
+    0.1, # RIGHT EAR
+    1.0, # LEFT CLAVICLE
+    1.0, # LEFT SHOULDER
+    1.0, # LEFT ELBOW
+    1.0, # LEFT WRIST
+    1.0, # LEFT HAND
+    0.1, # LEFT HANDTIP
+    0.1, # LEFT THUMB
+    1.0, # LEFT HIP
+    1.0, # LEFT KNEE
+    1.0, # LEFT ANKLE
+    1.0, # LEFT FOOT
+    1.0, # LEFT HEEL
+    1.0, # RIGHT HIP
+    1.0, # RIGHT KNEE
+    1.0, # RIGHT ANKLE
+    1.0, # RIGHT FOOT
+    1.0 # RIGHT HEEL
+    ]
+
+
+# for skeletons with main body joints only
+#joint_loss_weights = [1.0]
+
 """
 Visualization settings
 """
@@ -134,6 +147,7 @@ Load mocap data
 """
 
 bvh_tools = bvh.BVH_Tools()
+fbx_tools = fbx.FBX_Tools()
 mocap_tools = mocap.Mocap_Tools()
 
 all_mocap_data = []
@@ -142,13 +156,27 @@ for mocap_file in mocap_files:
     
     print("process file ", mocap_file)
     
-    bvh_data = bvh_tools.load(mocap_file_path + "/" + mocap_file)
-    mocap_data = mocap_tools.bvh_to_mocap(bvh_data)
+    if mocap_file.endswith(".bvh") or mocap_file.endswith(".BVH"):
+        bvh_data = bvh_tools.load(mocap_file_path + "/" + mocap_file)
+        mocap_data = mocap_tools.bvh_to_mocap(bvh_data)
+    elif mocap_file.endswith(".fbx") or mocap_file.endswith(".FBX"):
+        fbx_data = fbx_tools.load(mocap_file_path + "/" + mocap_file)
+        mocap_data = mocap_tools.fbx_to_mocap(fbx_data)[0] # first skeleton only
+    
+    mocap_data["skeleton"]["offsets"] *= mocap_pos_scale
+    mocap_data["motion"]["pos_local"] *= mocap_pos_scale
+    
+    # set x and z offset of root joint to zero
+    mocap_data["skeleton"]["offsets"][0, 0] = 0.0 
+    mocap_data["skeleton"]["offsets"][0, 2] = 0.0 
+
     mocap_data["motion"]["rot_local"] = mocap_tools.euler_to_quat(mocap_data["motion"]["rot_local_euler"], mocap_data["rot_sequence"])
 
     all_mocap_data.append(mocap_data)
-    
+
+
 # retrieve mocap properties
+
 mocap_data = all_mocap_data[0]
 joint_count = mocap_data["motion"]["rot_local"].shape[1]
 joint_dim = mocap_data["motion"]["rot_local"].shape[2]
@@ -658,108 +686,63 @@ torch.save(rnn.state_dict(), "results/weights/rnn_weights_epoch_{}".format(epoch
 # inference and rendering 
 poseRenderer = PoseRenderer(edge_list)
 
-# visualization settings
-view_ele = 90.0
-view_azi = -90.0
-view_line_width = 4.0
-view_size = 8.0
-
-
-# create ref pose sequence
-def create_ref_sequence_anim(start_pose_index, pose_count, file_name):
+def export_sequence_anim(pose_sequence, file_name):
     
-    print("start_pose_index ", start_pose_index)
-    print("pose_count ", pose_count)
+    pose_count = pose_sequence.shape[0]
+    pose_sequence = np.reshape(pose_sequence, (pose_count, joint_count, joint_dim))
     
-    pose_sequence_length = pose_sequence.shape[0]
-    
-    start_pose_index = max(start_pose_index, seq_input_length)
-    pose_count = min(pose_count, pose_sequence_length - start_pose_index)
-    
-    print("pose_sequence_length ", pose_sequence_length)
-    print("start_pose_index ", start_pose_index)
-    print("pose_count ", pose_count)
-    
-    sequence_excerpt = pose_sequence[start_pose_index:start_pose_index + pose_count, :]
-    sequence_excerpt = np.reshape(sequence_excerpt, (pose_count, joint_count, joint_dim))
-    
-    print("sequence_excerpt s ", sequence_excerpt.shape)
-
-    sequence_excerpt = torch.tensor(np.expand_dims(sequence_excerpt, axis=0)).to(device)
+    pose_sequence = torch.tensor(np.expand_dims(pose_sequence, axis=0)).to(device)
     zero_trajectory = torch.tensor(np.zeros((1, pose_count, 3), dtype=np.float32)).to(device)
     
-    skel_sequence = forward_kinematics(sequence_excerpt, zero_trajectory)
+    skel_sequence = forward_kinematics(pose_sequence, zero_trajectory)
     
-    print("skel_sequence s ", skel_sequence.shape)
-
-    skel_sequence = np.squeeze(skel_sequence.cpu().numpy())
+    skel_sequence = skel_sequence.detach().cpu().numpy()
+    skel_sequence = np.squeeze(skel_sequence)    
+    
     view_min, view_max = utils.get_equal_mix_max_positions(skel_sequence)
     skel_images = poseRenderer.create_pose_images(skel_sequence, view_min, view_max, view_ele, view_azi, view_line_width, view_size, view_size)
     skel_images[0].save(file_name, save_all=True, append_images=skel_images[1:], optimize=False, duration=33.0, loop=0)
 
+def export_sequence_bvh(pose_sequence, file_name):
+    
+    pose_count = pose_sequence.shape[0]
 
-def create_pred_sequence_anim(start_pose_index, pose_count, file_name):
+    pred_dataset = {}
+    pred_dataset["frame_rate"] = mocap_data["frame_rate"]
+    pred_dataset["rot_sequence"] = mocap_data["rot_sequence"]
+    pred_dataset["skeleton"] = mocap_data["skeleton"]
+    pred_dataset["motion"] = {}
+    pred_dataset["motion"]["pos_local"] = np.repeat(np.expand_dims(pred_dataset["skeleton"]["offsets"], axis=0), pose_count, axis=0)
+    pred_dataset["motion"]["rot_local"] = pose_sequence
+    pred_dataset["motion"]["rot_local_euler"] = mocap_tools.quat_to_euler(pred_dataset["motion"]["rot_local"], pred_dataset["rot_sequence"])
+
+    pred_bvh = mocap_tools.mocap_to_bvh(pred_dataset)
+    
+    bvh_tools.write(pred_bvh, file_name)
+
+def export_sequence_fbx(pose_sequence, file_name):
+    
+    pose_count = pose_sequence.shape[0]
+    
+    pred_dataset = {}
+    pred_dataset["frame_rate"] = mocap_data["frame_rate"]
+    pred_dataset["rot_sequence"] = mocap_data["rot_sequence"]
+    pred_dataset["skeleton"] = mocap_data["skeleton"]
+    pred_dataset["motion"] = {}
+    pred_dataset["motion"]["pos_local"] = np.repeat(np.expand_dims(pred_dataset["skeleton"]["offsets"], axis=0), pose_count, axis=0)
+    pred_dataset["motion"]["rot_local"] = pose_sequence
+    pred_dataset["motion"]["rot_local_euler"] = mocap_tools.quat_to_euler(pred_dataset["motion"]["rot_local"], pred_dataset["rot_sequence"])
+    
+    pred_fbx = mocap_tools.mocap_to_fbx([pred_dataset])
+    
+    fbx_tools.write(pred_fbx, file_name)
+
+
+def create_pred_sequence(pose_sequence, pose_count):
+    
     rnn.eval()
-    
-    pose_sequence_length = pose_sequence.shape[0]
-    
-    start_pose_index = max(start_pose_index, seq_input_length)
-    pose_count = min(pose_count, pose_sequence_length - start_pose_index)
-    
-    start_seq = pose_sequence[start_pose_index - seq_input_length:start_pose_index, :]
-    start_seq = torch.from_numpy(start_seq).to(device)
-    start_seq = torch.reshape(start_seq, (seq_input_length, pose_dim))
-    
-    next_seq = start_seq
-    
-    pred_poses = []
-    
-    for i in range(pose_count):
-        
-        with torch.no_grad():
-            pred_pose = rnn(torch.unsqueeze(next_seq, axis=0))
 
-        # normalize pred pose
-        pred_pose = torch.squeeze(pred_pose)
-        pred_pose = pred_pose.reshape((-1, 4))
-        pred_pose = nn.functional.normalize(pred_pose, p=2, dim=1)
-        pred_pose = pred_pose.reshape((1, pose_dim))
-
-        pred_poses.append(pred_pose)
-    
-        #print("next_seq s ", next_seq.shape)
-        #print("pred_pose s ", pred_pose.shape)
-
-        next_seq = torch.cat([next_seq[1:,:], pred_pose], axis=0)
-
-    pred_poses = torch.cat(pred_poses, dim=0)
-    pred_poses = pred_poses.reshape((1, pose_count, joint_count, joint_dim))
-
-
-    zero_trajectory = torch.tensor(np.zeros((1, pose_count, 3), dtype=np.float32))
-    zero_trajectory = zero_trajectory.to(device)
-    
-    skel_poses = forward_kinematics(pred_poses, zero_trajectory)
-    
-    skel_poses = skel_poses.detach().cpu().numpy()
-    skel_poses = np.squeeze(skel_poses)
-    
-    view_min, view_max = utils.get_equal_mix_max_positions(skel_poses)
-    pose_images = poseRenderer.create_pose_images(skel_poses, view_min, view_max, view_ele, view_azi, view_line_width, view_size, view_size)
-
-    pose_images[0].save(file_name, save_all=True, append_images=pose_images[1:], optimize=False, duration=33.0, loop=0) 
-
-    rnn.train()
-
-def create_pred_sequence(start_pose_index, pose_count):
-    rnn.eval()
-    
-    pose_sequence_length = pose_sequence.shape[0]
-    
-    start_pose_index = max(start_pose_index, seq_input_length)
-    pose_count = min(pose_count, pose_sequence_length - start_pose_index)
-    
-    start_seq = pose_sequence[start_pose_index - seq_input_length:start_pose_index, :]
+    start_seq = pose_sequence
     start_seq = torch.from_numpy(start_seq).to(device)
     start_seq = torch.reshape(start_seq, (seq_input_length, pose_dim))
     
@@ -792,61 +775,27 @@ def create_pred_sequence(start_pose_index, pose_count):
     
     return pred_poses.detach().cpu().numpy()
 
+# create original sequence
+
 seq_index = 0
+seq_start = 1000
+seq_length = 1000
 
-pose_sequence = all_mocap_data[seq_index]["motion"]["rot_local"].astype(dtype=np.float32)
-pose_sequence = pose_sequence.reshape(-1, pose_dim)
+orig_sequence = all_mocap_data[seq_index]["motion"]["rot_local"].astype(np.float32)
 
-seq_start_pose_index = 5200
-seq_pose_count = 2000
+export_sequence_anim(orig_sequence[seq_start:seq_start+seq_length], "results/anims/orig_sequence_seq_start_{}_length_{}.gif".format(seq_start, seq_length))
+export_sequence_fbx(orig_sequence[seq_start:seq_start+seq_length], "results/anims/orig_sequence_seq_start_{}_length_{}.fbx".format(seq_start, seq_length))
 
-# export as gif animations
+# create predicted sequence
 
-create_ref_sequence_anim(seq_start_pose_index, seq_pose_count, "results/anims/ref_range_{}_{}.gif".format(seq_start_pose_index, seq_pose_count))
-create_pred_sequence_anim(seq_start_pose_index, seq_pose_count, "results/anims/pred_ep_{}_range_{}_{}.gif".format(epochs, seq_start_pose_index, seq_pose_count))
+seq_index = 0
+seq_start = 1000
+seq_length = 1000
 
-# export as bvh files
+orig_sequence = all_mocap_data[seq_index]["motion"]["rot_local"].astype(np.float32)
+pred_sequence = create_pred_sequence(orig_sequence[seq_start:seq_start+seq_input_length], seq_length)
 
-seq_start_pose_index = 11500
-seq_pose_count = 4022
-
-mocap_data = all_mocap_data[seq_index]
-
-pred_poses = create_pred_sequence(seq_start_pose_index, seq_pose_count)
-
-pred_dataset = {}
-pred_dataset["frame_rate"] = mocap_data["frame_rate"]
-pred_dataset["rot_sequence"] = mocap_data["rot_sequence"]
-pred_dataset["skeleton"] = mocap_data["skeleton"]
-pred_dataset["motion"] = {}
-pred_dataset["motion"]["pos_local"] = np.repeat(np.expand_dims(pred_dataset["skeleton"]["offsets"], axis=0), seq_pose_count, axis=0)
-pred_dataset["motion"]["rot_local"] = pred_poses
-pred_dataset["motion"]["rot_local_euler"] = mocap_tools.quat_to_euler(pred_dataset["motion"]["rot_local"], pred_dataset["rot_sequence"])
-
-pred_bvh = mocap_tools.mocap_to_bvh(pred_dataset)
-
-bvh_tools.write(pred_bvh, "results/anims/pred_{}_{}_epoch_{}.bvh".format(seq_start_pose_index, seq_pose_count, epochs))
-
-bvh_tools.write(pred_bvh, "results/anims/tpose.bvh".format(seq_start_pose_index, seq_pose_count, epochs))
+export_sequence_anim(pred_sequence, "results/anims/pred_sequence_epoch_{}_seq_start_{}_length_{}.gif".format(epochs, seq_start, seq_length))
+export_sequence_fbx(pred_sequence, "results/anims/pred_sequence_epoch_{}_seq_start_{}_length_{}.fbx".format(epochs, seq_start, seq_length))
 
 
-"""
-Debug: export original mocap data as BVH file
-"""
-
-mocap_data = all_mocap_data[seq_index]
-seq_pose_count = mocap_data["motion"]["rot_local"].shape[0]
-
-pred_dataset = {}
-pred_dataset["frame_rate"] = mocap_data["frame_rate"]
-pred_dataset["rot_sequence"] = mocap_data["rot_sequence"]
-pred_dataset["skeleton"] = mocap_data["skeleton"]
-pred_dataset["motion"] = {}
-pred_dataset["motion"]["pos_local"] = np.repeat(np.expand_dims(pred_dataset["skeleton"]["offsets"], axis=0), seq_pose_count, axis=0)
-pred_dataset["motion"]["rot_local"] = mocap_data["motion"]["rot_local"]
-pred_dataset["motion"]["rot_local_euler"] = mocap_tools.quat_to_euler(mocap_data["motion"]["rot_local"], mocap_data["rot_sequence"])
-#pred_dataset["motion"]["rot_local_euler"] = mocap_tools.quat_to_euler(pred_dataset["motion"]["rot_local"], pred_dataset["rot_sequence"])
-
-pred_bvh = mocap_tools.mocap_to_bvh(pred_dataset)
-
-bvh_tools.write(pred_bvh, "ref_proc.bvh")

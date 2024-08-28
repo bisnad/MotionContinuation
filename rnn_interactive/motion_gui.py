@@ -74,7 +74,7 @@ class MotionGui(QtWidgets.QWidget):
         self.setLayout(self.q_grid)
 
         self.setGeometry(50,50,512,612)
-        self.setWindowTitle("Motion Continuation")
+        self.setWindowTitle("Sequence Continuation")
         
     def start(self):
         self.pose_thread_event = Event()
@@ -180,7 +180,7 @@ class MotionGui(QtWidgets.QWidget):
         
         self.pose_canvas_lines.setData(pos=lines_data, mode="lines", color=(1.0, 1.0, 1.0, 0.5), width=self.view_line_width)
         #self.pose_canvas_lines.setData(pos=lines_data, mode="lines", color=(0.0, 0.0, 0.0, 1.0), width=self.view_line_width)
-        #self.pose_canvas_points.setData(pos=pose, color=(1.0, 1.0, 1.0, 1.0))
+        self.pose_canvas_points.setData(pos=pose, color=(1.0, 1.0, 1.0, 1.0))
 
         #self.pose_canvas.show()
         
