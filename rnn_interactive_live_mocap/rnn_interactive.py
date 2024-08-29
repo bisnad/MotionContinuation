@@ -42,17 +42,21 @@ print('Using {} device'.format(device))
 Mocap Settings
 """
 
-"""
+
 mocap_file_path = "D:/Data/mocap/Daniel/Zed/fbx/"
 mocap_files = ["daniel_zed_solo1.fbx"]
 mocap_input_length = 64
+mocap_pos_scale = 1.0
 mocap_fps = 30
-"""
 
+
+"""
 mocap_file_path = "D:/data/mocap/stocos/Solos/Canal_14-08-2023/fbx_50hz/"
 mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
 mocap_input_length = 64
+mocap_pos_scale = 1.0
 mocap_fps = 50
+"""
 
 """
 Load Mocap Data
@@ -68,15 +72,24 @@ for mocap_file in mocap_files:
     
     print("process file ", mocap_file)
     
-    """
-    bvh_data = bvh_tools.load(mocap_file_path + "/" + mocap_file)
-    mocap_data = mocap_tools.bvh_to_mocap(bvh_data)
-    """
+    if mocap_file.endswith(".bvh") or mocap_file.endswith(".BVH"):
+        bvh_data = bvh_tools.load(mocap_file_path + "/" + mocap_file)
+        mocap_data = mocap_tools.bvh_to_mocap(bvh_data)
+    elif mocap_file.endswith(".fbx") or mocap_file.endswith(".FBX"):
+        fbx_data = fbx_tools.load(mocap_file_path + "/" + mocap_file)
+        mocap_data = mocap_tools.fbx_to_mocap(fbx_data)[0] # first skeleton only
     
-    fbx_data = fbx_tools.load(mocap_file_path + "/" + mocap_file)
-    mocap_data = mocap_tools.fbx_to_mocap(fbx_data)[0] # first skeleton only
+    mocap_data["skeleton"]["offsets"] *= mocap_pos_scale
+    mocap_data["motion"]["pos_local"] *= mocap_pos_scale
     
-    mocap_data["motion"]["rot_local"] = mocap_tools.euler_to_quat(mocap_data["motion"]["rot_local_euler"], mocap_data["rot_sequence"])
+    # set x and z offset of root joint to zero
+    mocap_data["skeleton"]["offsets"][0, 0] = 0.0 
+    mocap_data["skeleton"]["offsets"][0, 2] = 0.0 
+
+    if mocap_file.endswith(".bvh") or mocap_file.endswith(".BVH"):
+        mocap_data["motion"]["rot_local"] = mocap_tools.euler_to_quat_bvh(mocap_data["motion"]["rot_local_euler"], mocap_data["rot_sequence"])
+    elif mocap_file.endswith(".fbx") or mocap_file.endswith(".FBX"):
+        mocap_data["motion"]["rot_local"] = mocap_tools.euler_to_quat(mocap_data["motion"]["rot_local_euler"], mocap_data["rot_sequence"])
 
     all_mocap_data.append(mocap_data)
 
@@ -98,7 +111,7 @@ all_pose_sequences[0].shape
 Load Model
 """
 
-"""
+
 motion_model.config = {
     "input_length": 64,
     "data_dim": pose_dim,
@@ -107,8 +120,8 @@ motion_model.config = {
     "device": "cuda",
     "weights_path": "../rnn/results_ZED_Daniel_Solo/weights/rnn_weights_epoch_200"
     }
-"""
 
+"""
 motion_model.config = {
     "input_length": 64,
     "data_dim": pose_dim,
@@ -117,6 +130,7 @@ motion_model.config = {
     "device": "cuda",
     "weights_path": "../rnn/results_XSens_Muriel_EmbodiedMachineVariations/weights/rnn_weights_epoch_200"
     }
+"""
 
 model = motion_model.createModel(motion_model.config) 
 

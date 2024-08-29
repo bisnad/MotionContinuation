@@ -23,3 +23,5 @@ rnn/common/__pycache__/quaternion.cpython-310.pyc
 /rnn_interactive_pos/.spyproject
 /rnn_interactive_pos/__pycache__
 /rnn_interactive_pos/common/__pycache__
+/rnn/common/__pycache__
+/rnn_interactive/common/__pycache__

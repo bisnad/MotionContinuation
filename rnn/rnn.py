@@ -35,19 +35,20 @@ Mocap Data
 
 # important: the skeleton needs to be identical in all mocap recordings
 
-"""
+
 mocap_file_path = "D:/Data/mocap/Daniel/Zed/fbx/"
 mocap_files = ["daniel_zed_solo1.fbx"]
 mocap_valid_frame_ranges = [ [ [ 0, 9100 ] ] ]
 mocap_pos_scale = 1.0
 mocap_fps = 30
-"""
 
+"""
 mocap_file_path = "D:/Data/mocap/stocos/Duets/Amsterdam_2024/fbx_50hz"
 mocap_files = [ "Sherise_Take4_v2.fbx" ]
 mocap_valid_frame_ranges = [ [ [ 490, 30679] ] ]
 mocap_pos_scale = 1.0
 mocap_fps = 50
+"""
 
 
 """
@@ -169,8 +170,11 @@ for mocap_file in mocap_files:
     # set x and z offset of root joint to zero
     mocap_data["skeleton"]["offsets"][0, 0] = 0.0 
     mocap_data["skeleton"]["offsets"][0, 2] = 0.0 
-
-    mocap_data["motion"]["rot_local"] = mocap_tools.euler_to_quat(mocap_data["motion"]["rot_local_euler"], mocap_data["rot_sequence"])
+    
+    if mocap_file.endswith(".bvh") or mocap_file.endswith(".BVH"):
+        mocap_data["motion"]["rot_local"] = mocap_tools.euler_to_quat_bvh(mocap_data["motion"]["rot_local_euler"], mocap_data["rot_sequence"])
+    elif mocap_file.endswith(".fbx") or mocap_file.endswith(".FBX"):
+        mocap_data["motion"]["rot_local"] = mocap_tools.euler_to_quat(mocap_data["motion"]["rot_local_euler"], mocap_data["rot_sequence"])
 
     all_mocap_data.append(mocap_data)
 
@@ -714,7 +718,7 @@ def export_sequence_bvh(pose_sequence, file_name):
     pred_dataset["motion"] = {}
     pred_dataset["motion"]["pos_local"] = np.repeat(np.expand_dims(pred_dataset["skeleton"]["offsets"], axis=0), pose_count, axis=0)
     pred_dataset["motion"]["rot_local"] = pose_sequence
-    pred_dataset["motion"]["rot_local_euler"] = mocap_tools.quat_to_euler(pred_dataset["motion"]["rot_local"], pred_dataset["rot_sequence"])
+    pred_dataset["motion"]["rot_local_euler"] = mocap_tools.quat_to_euler_bvh(pred_dataset["motion"]["rot_local"], pred_dataset["rot_sequence"])
 
     pred_bvh = mocap_tools.mocap_to_bvh(pred_dataset)
     
