@@ -35,12 +35,21 @@ Mocap Data
 
 # important: the skeleton needs to be identical in all mocap recordings
 
-
+"""
 mocap_file_path = "D:/Data/mocap/Daniel/Zed/fbx/"
 mocap_files = ["daniel_zed_solo1.fbx"]
 mocap_valid_frame_ranges = [ [ [ 0, 9100 ] ] ]
 mocap_pos_scale = 1.0
 mocap_fps = 30
+"""
+
+
+mocap_file_path = "D:/Data/mocap/stocos/Solos/Canal_14-08-2023/fbx_50hz/"
+mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
+mocap_valid_frame_ranges = [ [ [ 150, 6400 ] ] ]
+mocap_pos_scale = 1.0
+mocap_fps = 50
+
 
 """
 mocap_file_path = "D:/Data/mocap/stocos/Duets/Amsterdam_2024/fbx_50hz"
@@ -57,6 +66,14 @@ mocap_files = [ "Sherise_Take4.fbx" ]
 mocap_valid_frame_ranges = [ [ [ 150, 18000] ] ]
 mocap_pos_scale = 1.0
 mocap_fps = 30
+"""
+
+"""
+mocap_file_path = "D:/Data/mocap/stocos/Incubatio/gaiska_snake_bvh/"
+mocap_files = ["240612_snake-001.bvh", "240612_snake-002.bvh"]
+mocap_valid_frame_ranges = [ [ [ 100, 14597 ] ], [ [ 10, 13623 ] ] ]
+mocap_pos_scale = 1.0
+mocap_fps = 50
 """
 
 """
@@ -90,7 +107,7 @@ model_save_interval = 10
 epochs = 200
 save_history = True
 
-
+"""
 # zed body34 specific joint loss weights
 # todo: this information should be stored in config files
 joint_loss_weights = [
@@ -129,10 +146,10 @@ joint_loss_weights = [
     1.0, # RIGHT FOOT
     1.0 # RIGHT HEEL
     ]
-
+"""
 
 # for skeletons with main body joints only
-#joint_loss_weights = [1.0]
+joint_loss_weights = [1.0]
 
 """
 Visualization settings
@@ -789,6 +806,8 @@ orig_sequence = all_mocap_data[seq_index]["motion"]["rot_local"].astype(np.float
 
 export_sequence_anim(orig_sequence[seq_start:seq_start+seq_length], "results/anims/orig_sequence_seq_start_{}_length_{}.gif".format(seq_start, seq_length))
 export_sequence_fbx(orig_sequence[seq_start:seq_start+seq_length], "results/anims/orig_sequence_seq_start_{}_length_{}.fbx".format(seq_start, seq_length))
+#export_sequence_bvh(orig_sequence[seq_start:seq_start+seq_length], "results/anims/orig_sequence_seq_start_{}_length_{}.bvh".format(seq_start, seq_length))
+
 
 # create predicted sequence
 
@@ -801,5 +820,7 @@ pred_sequence = create_pred_sequence(orig_sequence[seq_start:seq_start+seq_input
 
 export_sequence_anim(pred_sequence, "results/anims/pred_sequence_epoch_{}_seq_start_{}_length_{}.gif".format(epochs, seq_start, seq_length))
 export_sequence_fbx(pred_sequence, "results/anims/pred_sequence_epoch_{}_seq_start_{}_length_{}.fbx".format(epochs, seq_start, seq_length))
+#export_sequence_bvh(pred_sequence, "results/anims/pred_sequence_epoch_{}_seq_start_{}_length_{}.bvh".format(epochs, seq_start, seq_length))
+
 
 
