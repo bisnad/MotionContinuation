@@ -47,7 +47,6 @@ def createModel(config):
     rnn = Reccurent(config["data_dim"], config["node_dim"], config["data_dim"], config["layer_count"]).to( config["device"])
 
     if config["weights_path"] != "":
-        
         if config["device"] == 'cuda':
             rnn.load_state_dict(torch.load(config["weights_path"]))
         else:
