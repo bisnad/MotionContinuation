@@ -34,8 +34,14 @@ from common.pose_renderer import PoseRenderer
 Compute Device
 """
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-print('Using {} device'.format(device))
+device = 'cpu'
+if torch.cuda.is_available():
+    device = 'cuda'
+elif torch.backends.mps.is_available():
+    device = 'mps'
+
+#device = 'cuda' if torch.cuda.is_available() else 'cpu'
+#print('Using {} device'.format(device))
 
 """
 Mocap Settings

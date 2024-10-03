@@ -43,10 +43,11 @@ mocap_fps = 30
 mocap_joint_dim = 3
 """
 
+
 mocap_config_file = "configs/Halpe26_config.json" 
-mocap_file_path = "mocap/"
-mocap_files = ["Mocap_class_0_time_1723812067.0081663.pkl"]
-mocap_valid_frame_ranges = [ [ [ 0, 9390 ] ] ]
+mocap_file_path = "D:/Data/mocap/HannahMartin/pose2d"
+mocap_files = ["HannahMartin_ArrivalOfTheBirds.pkl"]
+mocap_valid_frame_ranges = [ [ [ 0, 3600 ] ] ]
 mocap_sensor_ids = ["/mocap/0/joint/pos2d_world", "/mocap/0/joint/visibility"]
 mocap_root_joint_name = "Hip"
 mocap_fps = 30
@@ -126,9 +127,13 @@ def recording_to_motiondata(mocap_recording, skeleton_data, mocap_sensor_ids):
     
     for sensor_id in mocap_sensor_ids:
 
-        #print("sensor_id ", sensor_id)
+        print("sensor_id ", sensor_id)
+        
         motion_data[sensor_id]  = [ sensor_values [vI] for vI in range(len(sensor_values)) if sensor_ids[vI].endswith(sensor_id) ]
         motion_data[sensor_id] = np.array(motion_data[sensor_id], dtype=np.float32)
+        
+        print("motion_data[sensor_id s ", motion_data[sensor_id].shape)
+        
         motion_data[sensor_id] = np.reshape(motion_data[sensor_id], (motion_data[sensor_id].shape[0], joint_count, -1))
 
     return motion_data

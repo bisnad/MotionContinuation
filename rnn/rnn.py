@@ -35,21 +35,20 @@ Mocap Data
 
 # important: the skeleton needs to be identical in all mocap recordings
 
-"""
+
 mocap_file_path = "D:/Data/mocap/Daniel/Zed/fbx/"
 mocap_files = ["daniel_zed_solo1.fbx"]
 mocap_valid_frame_ranges = [ [ [ 0, 9100 ] ] ]
 mocap_pos_scale = 1.0
 mocap_fps = 30
+
 """
-
-
 mocap_file_path = "D:/Data/mocap/stocos/Solos/Canal_14-08-2023/fbx_50hz/"
 mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
 mocap_valid_frame_ranges = [ [ [ 150, 6400 ] ] ]
 mocap_pos_scale = 1.0
 mocap_fps = 50
-
+"""
 
 """
 mocap_file_path = "D:/Data/mocap/stocos/Duets/Amsterdam_2024/fbx_50hz"
@@ -84,8 +83,8 @@ rnn_layer_dim = 512
 rnn_layer_count = 2
 
 save_weights = True
-load_weights = False
-rnn_weights_file = "results_xSens_stocos_takes1-7/weights/rnn_weights_epoch_200"
+load_weights = True
+rnn_weights_file = "results_XSens_Muriel_EmbodiedMachineVariations-7/weights/rnn_weights_epoch_200"
 
 """
 Training settings
