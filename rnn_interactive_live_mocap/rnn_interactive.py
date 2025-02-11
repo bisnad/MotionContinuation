@@ -42,21 +42,41 @@ print('Using {} device'.format(device))
 Mocap Settings
 """
 
-
-mocap_file_path = "D:/Data/mocap/Daniel/Zed/fbx/"
+# Example: ZED Mocap Recording
+mocap_file_path = "../../../Data/Mocap/Zed/Daniel/Solos/fbx_30hz/"
 mocap_files = ["daniel_zed_solo1.fbx"]
-mocap_input_length = 64
+mocap_valid_frame_ranges = [ [ [ 0, 9100 ] ] ]
 mocap_pos_scale = 1.0
 mocap_fps = 30
 
+"""
+Model Settings
+"""
+
+sequence_length = 64
+rnn_layer_dim = 512
+rnn_layer_count = 2
 
 """
-mocap_file_path = "D:/data/mocap/stocos/Solos/Canal_14-08-2023/fbx_50hz/"
-mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
-mocap_input_length = 64
-mocap_pos_scale = 1.0
-mocap_fps = 50
+Training Settings
 """
+
+# Example: ZED Mocap Recording
+rnn_weights_file = "../rnn/results_ZED_Daniel_Solo/weights/rnn_weights_epoch_200"
+
+
+"""
+OSC Settings
+"""
+
+osc_send_ip = "127.0.0.1"
+osc_send_port = 9004
+
+osc_receive_ip = "0.0.0.0"
+osc_receive_port = 9002
+
+
+
 
 """
 Load Mocap Data
@@ -111,26 +131,12 @@ all_pose_sequences[0].shape
 Load Model
 """
 
-
-motion_model.config = {
-    "input_length": 64,
-    "data_dim": pose_dim,
-    "node_dim": 512,
-    "layer_count": 2,
-    "device": "cuda",
-    "weights_path": "../rnn/results_ZED_Daniel_Solo/weights/rnn_weights_epoch_200"
-    }
-
-"""
-motion_model.config = {
-    "input_length": 64,
-    "data_dim": pose_dim,
-    "node_dim": 512,
-    "layer_count": 2,
-    "device": "cuda",
-    "weights_path": "../rnn/results_XSens_Muriel_EmbodiedMachineVariations/weights/rnn_weights_epoch_200"
-    }
-"""
+motion_model.config["input_length"] = sequence_length
+motion_model.config["data_dim"] = pose_dim
+motion_model.config["node_dim"] = rnn_layer_dim
+motion_model.config["layer_count"] = rnn_layer_count
+motion_model.config["device"] = device
+motion_model.config["weights_path"] = rnn_weights_file
 
 model = motion_model.createModel(motion_model.config) 
 
@@ -142,7 +148,7 @@ Setup Motion Synthesis
 synthesis_config  = motion_synthesis.config
 synthesis_config["skeleton"] = all_mocap_data[0]["skeleton"]
 synthesis_config["model"] = model
-synthesis_config["seq_length"] = mocap_input_length
+synthesis_config["seq_length"] = sequence_length
 synthesis_config["orig_sequences"] = all_pose_sequences
 synthesis_config["orig_seq_index"] = 0
 synthesis_config["device"] = device
@@ -154,8 +160,8 @@ synthesis = motion_synthesis.MotionSynthesis(synthesis_config)
 OSC Sender
 """
 
-motion_sender.config["ip"] = "127.0.0.1"
-motion_sender.config["port"] = 9008
+motion_sender.config["ip"] = osc_send_ip
+motion_sender.config["port"] = osc_send_port
 
 osc_sender = motion_sender.OscSender(motion_sender.config)
 
@@ -189,8 +195,8 @@ OSC Control
 motion_control.config["motion_seq"] = pose_sequence
 motion_control.config["synthesis"] = synthesis
 motion_control.config["gui"] = gui
-motion_control.config["ip"] = "0.0.0.0"
-motion_control.config["port"] = 9007
+motion_control.config["ip"] = osc_receive_ip
+motion_control.config["port"] = osc_receive_port
 
 osc_control = motion_control.MotionControl(motion_control.config)
 

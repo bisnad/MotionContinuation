@@ -225,7 +225,8 @@ class MotionSynthesis():
         live_pose = live_pose.reshape(1, self.joint_count, self.joint_dim)
         
         # get pred pose
-        self.model.eval()
+        #self.model.eval()
+        
         with torch.no_grad():
             self.pred_pose = self.model(torch.unsqueeze(self.motion_seq.reshape(-1, self.pose_dim), axis=0))
             
@@ -325,7 +326,7 @@ class MotionSynthesis():
         self.synth_pose_wrot = self.synth_pose_wrot.detach().cpu().numpy()
         self.synth_pose_wrot = self.synth_pose_wrot.reshape((self.joint_count, 4))
         
-        self.model.train()
+        #self.model.train()
 
                 
     def _forward_kinematics(self, rotations, root_positions):

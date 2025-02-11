@@ -52,5 +52,6 @@ def createModel(config):
         else:
             rnn.load_state_dict(torch.load(config["weights_path"], map_location=torch.device(config["device"] )))
 
+    rnn.eval()
         
     return rnn

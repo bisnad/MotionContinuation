@@ -176,7 +176,7 @@ class MotionSynthesis():
         if self.orig_seq_changed == True:
             self.changeSequence()
             
-        self.model.eval()
+        #self.model.eval()
         
         with torch.no_grad():
             
@@ -196,6 +196,6 @@ class MotionSynthesis():
         # append pred pose to sequence
         self.motion_seq = torch.cat([self.motion_seq[1:,:], self.pred_pose], axis=0)
         
-        self.model.train()
+        #self.model.train()
     
     

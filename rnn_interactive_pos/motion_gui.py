@@ -21,7 +21,7 @@ config = {"synthesis": None,
           "view_max": np.array([100, 100, 100], dtype=np.float32),
           "view_ele": 90,
           "view_azi": -90,
-          "view_dist": 250,
+          "view_dist": 5,
           "view_line_width": 2.0
     }
 
@@ -130,7 +130,7 @@ class MotionGui(QtWidgets.QWidget):
         
         self.pose_canvas_lines.setData(pos=lines_data, mode="lines", color=(1.0, 1.0, 1.0, 0.5), width=self.view_line_width)
         #self.pose_canvas_lines.setData(pos=lines_data, mode="lines", color=(0.0, 0.0, 0.0, 1.0), width=self.view_line_width)
-        self.pose_canvas_points.setData(pos=pose3D, color=(1.0, 1.0, 1.0, 1.0))
+        self.pose_canvas_points.setData(pos=pose3D, color=(1.0, 1.0, 1.0, 0.5))
 
         #self.pose_canvas.show()
         

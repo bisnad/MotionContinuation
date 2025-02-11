@@ -40,25 +40,58 @@ Mocap Settings
 # important: the skeleton needs to be identical in all mocap recordings
 
 
+# Example: MMPose 3D-Pose Estimation Recording
 mocap_config_file = "configs/Human36M_config.json" 
-mocap_file_path = "mocap/"
-mocap_files = ["Mocap_class_0_time_1724065746.5842216.pkl"]
-mocap_valid_frame_ranges = [ [ [ 0, 9390 ] ] ]
+mocap_file_path = "../../../Data/Mocap/Pose3D/HannahMartin/Solos/pkl"
+mocap_files = ["HannahMartin_Pos3D_Performance.pkl"]
+mocap_valid_frame_ranges = [ [ [ 0, 3600 ] ] ]
 mocap_sensor_ids = ["/mocap/0/joint/pos3d_world", "/mocap/0/joint/visibility"]
 mocap_root_joint_name = "Bottom_Torso"
 mocap_fps = 30
 mocap_joint_dim = 3
 
+
 """
+# Example: MMPose 2D-Pose Estimation Recording
 mocap_config_file = "configs/Halpe26_config.json" 
-mocap_file_path = "mocap/"
-mocap_files = ["Mocap_class_0_time_1723812067.0081663.pkl"]
-mocap_valid_frame_ranges = [ [ [ 0, 9390 ] ] ]
+mocap_file_path = "../../../Data/Mocap/Pose2D/HannahMartin/Solos/pkl"
+mocap_files = ["HannahMartin_Pos2D_Performance.pkl"]
+mocap_valid_frame_ranges = [ [ [ 0, 3600 ] ] ]
 mocap_sensor_ids = ["/mocap/0/joint/pos2d_world", "/mocap/0/joint/visibility"]
 mocap_root_joint_name = "Hip"
 mocap_fps = 30
 mocap_joint_dim = 2
 """
+
+"""
+Model Settings
+"""
+
+sequence_length = 64
+rnn_layer_dim = 512
+rnn_layer_count = 2
+
+"""
+Training Settings
+"""
+
+# Example: MMPose 3D-Pose Estimation Recording
+rnn_weights_file = "../rnn/results_MMPose3D_HannahMartin/weights/rnn_weights_epoch_200"
+
+"""
+# Example: MMPose 2D-Pose Estimation Recording
+rnn_weights_file = "../rnn/results_MMPose2D_HannahMartin/weights/rnn_weights_epoch_200"
+"""
+
+"""
+OSC Settings
+"""
+
+osc_send_ip = "127.0.0.1"
+osc_send_port = 9004
+
+osc_receive_ip = "0.0.0.0"
+osc_receive_port = 9002
 
 """
 Load Mocap Data
@@ -143,13 +176,12 @@ for motion_data in all_motion_data:
 Load Model
 """
 
-motion_model.config["input_length"] = 64
+motion_model.config["input_length"] = sequence_length
 motion_model.config["data_dim"] = pose_dim
-motion_model.config["node_dim"] = 512
-motion_model.config["layer_count"] = 2
+motion_model.config["node_dim"] = rnn_layer_dim
+motion_model.config["layer_count"] = rnn_layer_count
 motion_model.config["device"] = device
-#motion_model.config["weights_path"] = "../rnn/results_MMPose2D_HannahMartin/weights/rnn_weights_epoch_200"
-motion_model.config["weights_path"] = "../rnn/results_MMPose3D_HannahMartin/weights/rnn_weights_epoch_200"
+motion_model.config["weights_path"] = rnn_weights_file
 
 model = motion_model.createModel(motion_model.config) 
 
@@ -172,8 +204,8 @@ synthesis = motion_synthesis.MotionSynthesis(synthesis_config)
 OSC Sender
 """
 
-motion_sender.config["ip"] = "127.0.0.1"
-motion_sender.config["port"] = 9004
+motion_sender.config["ip"] = osc_send_ip
+motion_sender.config["port"] = osc_send_port
 
 osc_sender = motion_sender.OscSender(motion_sender.config)
 
@@ -207,8 +239,8 @@ OSC Control
 motion_control.config["motion_seq"] = pose_sequence
 motion_control.config["synthesis"] = synthesis
 motion_control.config["gui"] = gui
-motion_control.config["ip"] = "0.0.0.0"
-motion_control.config["port"] = 9002
+motion_control.config["ip"] = osc_receive_ip
+motion_control.config["port"] = osc_receive_port
 
 osc_control = motion_control.MotionControl(motion_control.config)
 
