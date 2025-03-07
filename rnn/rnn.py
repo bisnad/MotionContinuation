@@ -14,6 +14,7 @@ import scipy.linalg as sclinalg
 import os, sys, time, subprocess
 import numpy as np
 import math
+import json
 
 from common import utils
 from common import bvh_tools as bvh
@@ -41,6 +42,7 @@ mocap_files = ["daniel_zed_solo1.fbx"]
 mocap_valid_frame_ranges = [ [ [ 0, 9100 ] ] ]
 mocap_pos_scale = 1.0
 mocap_fps = 30
+mocap_loss_weights_file = "configs/zed_body34_joint_loss_weights.json"
 
 """
 # Example: Captury Mocap Recording
@@ -49,6 +51,7 @@ mocap_files = ["zachary_music_improvisation.fbx"]
 mocap_valid_frame_ranges = [ [ [ 1400, 29000 ] ] ]
 mocap_pos_scale = 0.1
 mocap_fps = 50
+mocap_loss_weights_file = None
 """
 
 """
@@ -58,6 +61,7 @@ mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
 mocap_valid_frame_ranges = [ [ [ 200, 6400 ] ] ]
 mocap_pos_scale = 1.0
 mocap_fps = 50
+mocap_loss_weights_file = None
 """
 
 """
@@ -67,6 +71,7 @@ mocap_files = ["polytopia_fullbody_take2.fbx"]
 mocap_valid_frame_ranges = [ [ [ 570, 9670] ] ]
 mocap_pos_scale = 1.0
 mocap_fps = 50
+mocap_loss_weights_file = "configs/qualisys_with_hands_joint_loss_weights.json"
 """
 
 """
@@ -99,50 +104,6 @@ model_save_interval = 10
 
 epochs = 200
 save_history = True
-
-"""
-# zed body34 specific joint loss weights
-# todo: this information should be stored in config files
-joint_loss_weights = [
-    1.0, # PELVIS
-    1.0, # NAVAL SPINE
-    1.0, # CHEST SPINE
-    1.0, # RIGHT CLAVICLE
-    1.0, # RIGHT SHOULDER
-    1.0, # RIGHT ELBOW
-    1.0, # RIGHT WRIST
-    1.0, # RIGHT HAND
-    0.1, # RIGHT HANDTIP
-    0.1, # RIGHT THUMB
-    1.0, # NECK
-    1.0, # HEAD
-    0.1, # NOSE
-    0.1, # LEFT EYE
-    0.1, # LEFT EAR
-    0.1, # RIGHT EYE
-    0.1, # RIGHT EAR
-    1.0, # LEFT CLAVICLE
-    1.0, # LEFT SHOULDER
-    1.0, # LEFT ELBOW
-    1.0, # LEFT WRIST
-    1.0, # LEFT HAND
-    0.1, # LEFT HANDTIP
-    0.1, # LEFT THUMB
-    1.0, # LEFT HIP
-    1.0, # LEFT KNEE
-    1.0, # LEFT ANKLE
-    1.0, # LEFT FOOT
-    1.0, # LEFT HEEL
-    1.0, # RIGHT HIP
-    1.0, # RIGHT KNEE
-    1.0, # RIGHT ANKLE
-    1.0, # RIGHT FOOT
-    1.0 # RIGHT HEEL
-    ]
-"""
-
-# for skeletons with main body joints only
-joint_loss_weights = [1.0]
 
 """
 Visualization settings
@@ -211,6 +172,16 @@ def get_edge_list(children):
     return edge_list
 
 edge_list = get_edge_list(children)
+
+# set joint loss weigths 
+
+if mocap_loss_weights_file is not None:
+    with open(mocap_loss_weights_file) as f:
+        joint_loss_weights = json.load(f)
+        joint_loss_weights = joint_loss_weights["joint_loss_weights"]
+else:
+    joint_loss_weights = [1.0]
+    joint_loss_weights *= joint_count
 
 """
 Create Dataset
