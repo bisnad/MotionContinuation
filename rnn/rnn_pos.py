@@ -32,8 +32,19 @@ Mocap Settings
 """
 # important: the skeleton needs to be identical in all mocap recordings
 
+# Example: MMPose 2D-Pose Estimation Recording
+mocap_config_file = "data/configs/COCO_config.json" 
+mocap_file_path = "../../../Data/Mocap/Pose2D/Stocos/Solos"
+mocap_files = ["Stocos_Pose2D_BlumenBaile.pkl"]
+mocap_valid_frame_ranges = [ [ [ 0, 3600 ] ] ]
+mocap_sensor_ids = ["/mocap/0/joint/pos_world", "/mocap/0/joint/visibility"]
+mocap_root_joint_name = "Left_Hip"
+mocap_fps = 30
+mocap_joint_dim = 2
+
+"""
 # Example: MMPose 3D-Pose Estimation Recording
-mocap_config_file = "configs/Human36M_config.json" 
+mocap_config_file = "data/configs/Human36M_config.json" 
 mocap_file_path = "../../../Data/Mocap/Pose3D/HannahMartin/Solos/pkl"
 mocap_files = ["HannahMartin_Pos3D_Performance.pkl"]
 mocap_valid_frame_ranges = [ [ [ 0, 3600 ] ] ]
@@ -41,11 +52,11 @@ mocap_sensor_ids = ["/mocap/0/joint/pos3d_world", "/mocap/0/joint/visibility"]
 mocap_root_joint_name = "Bottom_Torso"
 mocap_fps = 30
 mocap_joint_dim = 3
-
+"""
 
 """
 # Example: MMPose 2D-Pose Estimation Recording
-mocap_config_file = "configs/Halpe26_config.json" 
+mocap_config_file = "data/configs/Halpe26_config.json" 
 mocap_file_path = "../../../Data/Mocap/Pose2D/HannahMartin/Solos/pkl"
 mocap_files = ["HannahMartin_Pos2D_Performance.pkl"]
 mocap_valid_frame_ranges = [ [ [ 0, 3600 ] ] ]
@@ -130,12 +141,10 @@ def recording_to_motiondata(mocap_recording, skeleton_data, mocap_sensor_ids):
     
     for sensor_id in mocap_sensor_ids:
 
-        print("sensor_id ", sensor_id)
-        
         motion_data[sensor_id]  = [ sensor_values [vI] for vI in range(len(sensor_values)) if sensor_ids[vI].endswith(sensor_id) ]
         motion_data[sensor_id] = np.array(motion_data[sensor_id], dtype=np.float32)
         
-        print("motion_data[sensor_id s ", motion_data[sensor_id].shape)
+        print("sensor_id ", sensor_id, " motion_data[sensor_id] s ", motion_data[sensor_id].shape)
         
         motion_data[sensor_id] = np.reshape(motion_data[sensor_id], (motion_data[sensor_id].shape[0], joint_count, -1))
 
@@ -183,12 +192,8 @@ edge_list = get_edge_list(children)
 mocap_root_joint_index = skeleton_data["joints"].index(mocap_root_joint_name)
 
 for motion_data in all_motion_data:
-
-    if joint_dim == 3:
-        joint_pos = motion_data["/mocap/0/joint/pos3d_world"]
-    else:
-        joint_pos = motion_data["/mocap/0/joint/pos2d_world"]
-        
+    
+    joint_pos = motion_data["/mocap/0/joint/pos_world"]
     root_pos = joint_pos[:, mocap_root_joint_index:mocap_root_joint_index+1, :]
     
     joint_pos_root_zero = joint_pos - root_pos

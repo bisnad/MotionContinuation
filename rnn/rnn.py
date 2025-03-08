@@ -37,12 +37,22 @@ Mocap Data
 # important: the skeleton needs to be identical in all mocap recordings
 
 # Example: ZED Mocap Recording
+mocap_file_path = "data/mocap/"
+mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
+mocap_valid_frame_ranges = [ [ [ 200, 6400 ] ] ]
+mocap_pos_scale = 1.0
+mocap_fps = 50
+mocap_loss_weights_file = None
+
+"""
+# Example: ZED Mocap Recording
 mocap_file_path = "../../../Data/Mocap/Zed/Daniel/Solos/fbx_30hz/"
 mocap_files = ["daniel_zed_solo1.fbx"]
 mocap_valid_frame_ranges = [ [ [ 0, 9100 ] ] ]
 mocap_pos_scale = 1.0
 mocap_fps = 30
 mocap_loss_weights_file = "configs/zed_body34_joint_loss_weights.json"
+"""
 
 """
 # Example: Captury Mocap Recording
