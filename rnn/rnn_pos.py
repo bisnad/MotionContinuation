@@ -36,7 +36,7 @@ Mocap Settings
 mocap_config_file = "data/configs/COCO_config.json" 
 mocap_file_path = "../../../Data/Mocap/Pose2D/Stocos/Solos"
 mocap_files = ["Stocos_Pose2D_BlumenBaile.pkl"]
-mocap_valid_frame_ranges = [ [ [ 0, 3600 ] ] ]
+mocap_valid_frame_ranges = [ [ [ 0, 5000 ] ] ]
 mocap_sensor_ids = ["/mocap/0/joint/pos_world", "/mocap/0/joint/visibility"]
 mocap_root_joint_name = "Left_Hip"
 mocap_fps = 30
