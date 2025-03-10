@@ -34,6 +34,17 @@ Mocap Settings
 
 # Example: MMPose 2D-Pose Estimation Recording
 mocap_config_file = "data/configs/COCO_config.json" 
+mocap_file_path = "data/mocap/"
+mocap_files = ["Stocos_Pose2D_BlumenBaile.pkl"]
+mocap_valid_frame_ranges = [ [ [ 0, 5000 ] ] ]
+mocap_sensor_ids = ["/mocap/0/joint/pos_world"]
+mocap_root_joint_name = "Left_Hip"
+mocap_fps = 30
+mocap_joint_dim = 2
+
+"""
+# Example: MMPose 2D-Pose Estimation Recording
+mocap_config_file = "data/configs/COCO_config.json" 
 mocap_file_path = "../../../Data/Mocap/Pose2D/Stocos/Solos"
 mocap_files = ["Stocos_Pose2D_BlumenBaile.pkl"]
 mocap_valid_frame_ranges = [ [ [ 0, 5000 ] ] ]
@@ -41,6 +52,7 @@ mocap_sensor_ids = ["/mocap/0/joint/pos_world"]
 mocap_root_joint_name = "Left_Hip"
 mocap_fps = 30
 mocap_joint_dim = 2
+"""
 
 """
 # Example: MMPose 3D-Pose Estimation Recording
@@ -71,13 +83,17 @@ Training settings
 
 batch_size = 32
 test_percentage = 0.1
+
 seq_input_length = 64
 seq_output_length = 10 # this is only used for non-teacher forcing scenarios
+
 learning_rate = 1e-4
 pos_loss_scale = 1.0
 teacher_forcing_prob = 0.0
 model_save_interval = 10
+
 epochs = 200
+
 save_history = True
 joint_loss_weights = [1.0]
 
