@@ -79,7 +79,7 @@ mocap_fps = 30
 mocap_joint_dim = 2
 ```
 
-In the following, only the variables that differ from those in the `rnn.py` source file are described. The string value assigned to the variable `mocap_config_file` specifies the skeleton representation used by the Pose Estimation tool when creating the recording.  The list of string values assigned to the variable `mocap_sensor_ids` specify the address parts of the OSC messages that contain motion data required for created the dataset. The string value assigned to the variable `mocap_root_joint_name` specifies the name of the joint that serves as root joint.  The integer value assigned to the variable `mocap_joint_dim`specifies the number of dimensions of the joint positions. This value is 2 for motion data that has been captured with a 2D Pose Estimation tool, and 3 for motion data that has been captured with a 3D Pose Estimation too.. 
+In the following, only the variables that differ from those in the `rnn.py` source file are described. The string value assigned to the variable `mocap_config_file` specifies the skeleton representation used by the Pose Estimation tool when creating the recording.  The list of string values assigned to the variable `mocap_sensor_ids` specify the address parts of the OSC messages that contain motion data required for created the dataset. The string value assigned to the variable `mocap_root_joint_name` specifies the name of the joint that serves as root joint.  The integer value assigned to the variable `mocap_joint_dim`specifies the number of dimensions of the joint positions. This value is 2 for motion data that has been captured with a 2D Pose Estimation tool, and 3 for motion data that has been captured with a 3D Pose Estimation tool.
 
 #### Functionality
 

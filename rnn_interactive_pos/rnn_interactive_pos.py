@@ -35,32 +35,46 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print('Using {} device'.format(device))
 
 """
-Mocap Settings
+Mocap and Training Settings
+
+important: the skeleton needs to be identical in all mocap recordings
 """
-# important: the skeleton needs to be identical in all mocap recordings
 
+# Example: MMPose 2D-Pose Estimation Recording
+mocap_config_file = "data/configs/COCO_config.json"
+mocap_file_path = "data/mocap/"
+mocap_files = ["Stocos_Pose2D_BlumenBaile.pkl"]
+mocap_sensor_ids = ["/mocap/0/joint/pos_world"]
+mocap_root_joint_name = "Left_Hip"
+mocap_fps = 30
+mocap_joint_dim = 2
 
+rnn_weights_file = "data/results/weights/rnn_weights_epoch_200"
+
+"""
 # Example: MMPose 3D-Pose Estimation Recording
-mocap_config_file = "configs/Human36M_config.json" 
-mocap_file_path = "../../../Data/Mocap/Pose3D/HannahMartin/Solos/pkl"
-mocap_files = ["HannahMartin_Pos3D_Performance.pkl"]
-mocap_valid_frame_ranges = [ [ [ 0, 3600 ] ] ]
-mocap_sensor_ids = ["/mocap/0/joint/pos3d_world", "/mocap/0/joint/visibility"]
-mocap_root_joint_name = "Bottom_Torso"
+mocap_config_file = "data/configs/Human36M_config.json" 
+mocap_file_path = "../../../Data/Mocap/Pose3D/Stocos/Solos"
+mocap_files = ["Stocos_Pose3D_BlumenBaile.pkl"]
+mocap_sensor_ids = ["/mocap/0/joint/pos_world"]
+mocap_root_joint_name = "Left_Hip"
 mocap_fps = 30
 mocap_joint_dim = 3
 
+rnn_weights_file = "../../../Data/Models/MotionContinuation/rnn/results_MMPose3D_Muriel_BlumenBaile/weights/rnn_weights_epoch_200"
+"""
 
 """
 # Example: MMPose 2D-Pose Estimation Recording
-mocap_config_file = "configs/Halpe26_config.json" 
-mocap_file_path = "../../../Data/Mocap/Pose2D/HannahMartin/Solos/pkl"
-mocap_files = ["HannahMartin_Pos2D_Performance.pkl"]
-mocap_valid_frame_ranges = [ [ [ 0, 3600 ] ] ]
-mocap_sensor_ids = ["/mocap/0/joint/pos2d_world", "/mocap/0/joint/visibility"]
-mocap_root_joint_name = "Hip"
+mocap_config_file = "data/configs/COCO_config.json" 
+mocap_file_path = "../../../Data/Mocap/Pose2D/Stocos/Solos"
+mocap_files = ["Stocos_Pose2D_BlumenBaile.pkl"]
+mocap_sensor_ids = ["/mocap/0/joint/pos_world"]
+mocap_root_joint_name = "Left_Hip"
 mocap_fps = 30
 mocap_joint_dim = 2
+
+rnn_weights_file = "../../../Data/Models/MotionContinuation/rnn/results_MMPose2D_Muriel_BlumenBaile/weights/rnn_weights_epoch_200"
 """
 
 """
@@ -70,18 +84,6 @@ Model Settings
 sequence_length = 64
 rnn_layer_dim = 512
 rnn_layer_count = 2
-
-"""
-Training Settings
-"""
-
-# Example: MMPose 3D-Pose Estimation Recording
-rnn_weights_file = "../rnn/results_MMPose3D_HannahMartin/weights/rnn_weights_epoch_200"
-
-"""
-# Example: MMPose 2D-Pose Estimation Recording
-rnn_weights_file = "../rnn/results_MMPose2D_HannahMartin/weights/rnn_weights_epoch_200"
-"""
 
 """
 OSC Settings
@@ -156,11 +158,7 @@ mocap_root_joint_index = skeleton_data["joints"].index(mocap_root_joint_name)
 
 for motion_data in all_motion_data:
 
-    if joint_dim == 3:
-        joint_pos = motion_data["/mocap/0/joint/pos3d_world"]
-    else:
-        joint_pos = motion_data["/mocap/0/joint/pos2d_world"]
-        
+    joint_pos = motion_data["/mocap/0/joint/pos_world"]
     root_pos = joint_pos[:, mocap_root_joint_index:mocap_root_joint_index+1, :]
     
     joint_pos_root_zero = joint_pos - root_pos

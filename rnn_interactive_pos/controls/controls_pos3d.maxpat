@@ -195,7 +195,7 @@
 					"patching_rect" : [ 588.75, 595.0, 24.0, 24.0 ],
 					"presentation" : 1,
 					"presentation_rect" : [ 369.0, 366.0, 24.0, 24.0 ],
-					"varname" : "rot_repeat[6]"
+					"varname" : "pos_repeat[1]"
 				}
 
 			}
@@ -282,7 +282,7 @@
 					"patching_rect" : [ 774.5, 513.0, 50.0, 22.0 ],
 					"presentation" : 1,
 					"presentation_rect" : [ 424.875, 342.0, 50.0, 22.0 ],
-					"varname" : "rotaxis_y[1]"
+					"varname" : "pos_y[1]"
 				}
 
 			}
@@ -298,7 +298,7 @@
 					"patching_rect" : [ 855.5, 513.0, 50.0, 22.0 ],
 					"presentation" : 1,
 					"presentation_rect" : [ 479.0, 342.0, 50.0, 22.0 ],
-					"varname" : "rotaxis_z[1]"
+					"varname" : "pos_z[1]"
 				}
 
 			}
@@ -314,7 +314,7 @@
 					"patching_rect" : [ 694.5, 513.0, 50.0, 22.0 ],
 					"presentation" : 1,
 					"presentation_rect" : [ 370.5, 342.0, 50.0, 22.0 ],
-					"varname" : "rotaxis_x[1]"
+					"varname" : "pos_x[1]"
 				}
 
 			}
@@ -395,7 +395,7 @@
 					"patching_rect" : [ 126.25, 593.0, 24.0, 24.0 ],
 					"presentation" : 1,
 					"presentation_rect" : [ 94.0, 366.0, 24.0, 24.0 ],
-					"varname" : "rot_repeat"
+					"varname" : "pos_repeat"
 				}
 
 			}
@@ -482,7 +482,7 @@
 					"patching_rect" : [ 199.5, 511.0, 50.0, 22.0 ],
 					"presentation" : 1,
 					"presentation_rect" : [ 149.875, 342.0, 50.0, 22.0 ],
-					"varname" : "rotaxis_y"
+					"varname" : "pos_y"
 				}
 
 			}
@@ -498,7 +498,7 @@
 					"patching_rect" : [ 255.5, 511.0, 50.0, 22.0 ],
 					"presentation" : 1,
 					"presentation_rect" : [ 204.0, 342.0, 50.0, 22.0 ],
-					"varname" : "rotaxis_z"
+					"varname" : "pos_z"
 				}
 
 			}
@@ -514,7 +514,7 @@
 					"patching_rect" : [ 145.25, 511.0, 50.0, 22.0 ],
 					"presentation" : 1,
 					"presentation_rect" : [ 95.5, 342.0, 50.0, 22.0 ],
-					"varname" : "rotaxis_x"
+					"varname" : "pos_x"
 				}
 
 			}
@@ -844,8 +844,8 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 55.25, 64.0, 103.0, 22.0 ],
-					"text" : "read controls.json"
+					"patching_rect" : [ 55.25, 64.0, 143.0, 22.0 ],
+					"text" : "read controls_pos3d.json"
 				}
 
 			}
@@ -1026,7 +1026,7 @@
 			}
 , 			{
 				"box" : 				{
-					"autorestore" : "controls.json",
+					"autorestore" : "controls_pos3d.json",
 					"fontname" : "Verdana",
 					"fontsize" : 9.0,
 					"hidden" : 1,
@@ -1060,18 +1060,18 @@
 					"outlettype" : [ "", "", "", "" ],
 					"patching_rect" : [ 129.0, 200.0, 53.0, 19.0 ],
 					"restore" : 					{
-						"input_sequence_start" : [ 2224 ],
+						"input_sequence_start" : [ 64 ],
 						"input_sequence_start[3]" : [ 0 ],
 						"joint_index" : [ 2 ],
 						"joint_index[1]" : [ 2 ],
-						"rot_repeat" : [ 0 ],
-						"rot_repeat[6]" : [ 0 ],
-						"rotaxis_x" : [ 61.0 ],
-						"rotaxis_x[1]" : [ 4.2 ],
-						"rotaxis_y" : [ 1.6 ],
-						"rotaxis_y[1]" : [ 1.0 ],
-						"rotaxis_z" : [ 0.0 ],
-						"rotaxis_z[1]" : [ 0.0 ]
+						"pos_repeat" : [ 0 ],
+						"pos_repeat[1]" : [ 0 ],
+						"pos_x" : [ 1.0 ],
+						"pos_x[1]" : [ 1.0 ],
+						"pos_y" : [ 1.0 ],
+						"pos_y[1]" : [ 1.0 ],
+						"pos_z" : [ 1.0 ],
+						"pos_z[1]" : [ 1.0 ]
 					}
 ,
 					"text" : "autopattr",
@@ -1521,7 +1521,7 @@
 			}
  ],
 		"dependency_cache" : [ 			{
-				"name" : "controls.json",
+				"name" : "controls_pos3d.json",
 				"bootpath" : "~/Projects/Premiere/Software_Git2/MotionContinuation/rnn_interactive_pos/controls",
 				"patcherrelativepath" : ".",
 				"type" : "JSON",

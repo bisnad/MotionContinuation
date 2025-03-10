@@ -74,7 +74,7 @@ The tool provides a minimal GUI  for starting and stopping the motion continuati
 
 ### OSC Communication
 
-The tool receives OSC messages that modify its behaviour. Some OSC messages initialise the model with a new input motion sequence. Other OSC messages alter the rotations of a single joint in the input motion sequence. Initialising the model with a new input motion sequence drastically changes the predicted motion continuation. Altering the rotations of a single joint only slightly influences the predicted motion continuation. 
+The tool receives OSC messages that modify its behaviour. Some OSC messages initialise the model with a new input motion sequence. Other OSC messages alter the rotations of a single joint in the input motion sequence. Initialising the model with a new input motion sequence drastically changes the predicted motion continuation. Altering the rotation of a single joint only slightly influences the predicted motion continuation. 
 
 The following OSC messages are received by the tool:
 

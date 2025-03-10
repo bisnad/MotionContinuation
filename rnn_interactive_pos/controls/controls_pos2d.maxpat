@@ -10,7 +10,7 @@
 		}
 ,
 		"classnamespace" : "box",
-		"rect" : [ 653.0, 119.0, 1225.0, 973.0 ],
+		"rect" : [ -1108.0, 220.0, 627.0, 376.0 ],
 		"bglocked" : 0,
 		"openinpresentation" : 1,
 		"default_fontsize" : 12.0,
@@ -195,7 +195,7 @@
 					"patching_rect" : [ 588.75, 595.0, 24.0, 24.0 ],
 					"presentation" : 1,
 					"presentation_rect" : [ 334.5, 337.0, 24.0, 24.0 ],
-					"varname" : "rot_repeat[6]"
+					"varname" : "pos_repeat[1]"
 				}
 
 			}
@@ -282,7 +282,7 @@
 					"patching_rect" : [ 774.5, 513.0, 50.0, 22.0 ],
 					"presentation" : 1,
 					"presentation_rect" : [ 390.375, 313.0, 50.0, 22.0 ],
-					"varname" : "rotaxis_y[1]"
+					"varname" : "pos_y[1]"
 				}
 
 			}
@@ -298,7 +298,7 @@
 					"patching_rect" : [ 694.5, 513.0, 50.0, 22.0 ],
 					"presentation" : 1,
 					"presentation_rect" : [ 336.0, 313.0, 50.0, 22.0 ],
-					"varname" : "rotaxis_x[1]"
+					"varname" : "pos_x[1]"
 				}
 
 			}
@@ -379,7 +379,7 @@
 					"patching_rect" : [ 126.25, 593.0, 24.0, 24.0 ],
 					"presentation" : 1,
 					"presentation_rect" : [ 97.5, 337.0, 24.0, 24.0 ],
-					"varname" : "rot_repeat"
+					"varname" : "pos_repeat"
 				}
 
 			}
@@ -466,7 +466,7 @@
 					"patching_rect" : [ 199.5, 511.0, 50.0, 22.0 ],
 					"presentation" : 1,
 					"presentation_rect" : [ 153.375, 313.0, 50.0, 22.0 ],
-					"varname" : "rotaxis_y"
+					"varname" : "pos_y"
 				}
 
 			}
@@ -482,7 +482,7 @@
 					"patching_rect" : [ 145.25, 511.0, 50.0, 22.0 ],
 					"presentation" : 1,
 					"presentation_rect" : [ 99.0, 313.0, 50.0, 22.0 ],
-					"varname" : "rotaxis_x"
+					"varname" : "pos_x"
 				}
 
 			}
@@ -812,8 +812,8 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 55.25, 64.0, 103.0, 22.0 ],
-					"text" : "read controls.json"
+					"patching_rect" : [ 55.25, 64.0, 143.0, 22.0 ],
+					"text" : "read controls_pos2d.json"
 				}
 
 			}
@@ -994,7 +994,7 @@
 			}
 , 			{
 				"box" : 				{
-					"autorestore" : "controls.json",
+					"autorestore" : "controls_pos2d.json",
 					"fontname" : "Verdana",
 					"fontsize" : 9.0,
 					"hidden" : 1,
@@ -1032,12 +1032,12 @@
 						"input_sequence_start[3]" : [ 0 ],
 						"joint_index" : [ 2 ],
 						"joint_index[1]" : [ 0 ],
-						"rot_repeat" : [ 0 ],
-						"rot_repeat[6]" : [ 0 ],
-						"rotaxis_x" : [ 100.0 ],
-						"rotaxis_x[1]" : [ 166.0 ],
-						"rotaxis_y" : [ 100.0 ],
-						"rotaxis_y[1]" : [ 10.0 ]
+						"pos_repeat" : [ 0 ],
+						"pos_repeat[1]" : [ 0 ],
+						"pos_x" : [ 100.0 ],
+						"pos_x[1]" : [ 166.0 ],
+						"pos_y" : [ 100.0 ],
+						"pos_y[1]" : [ 10.0 ]
 					}
 ,
 					"text" : "autopattr",
@@ -1473,7 +1473,7 @@
 			}
  ],
 		"dependency_cache" : [ 			{
-				"name" : "controls.json",
+				"name" : "controls_pos2d.json",
 				"bootpath" : "~/Projects/Premiere/Software_Git2/MotionContinuation/rnn_interactive_pos/controls",
 				"patcherrelativepath" : ".",
 				"type" : "JSON",

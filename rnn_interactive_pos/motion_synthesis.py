@@ -156,7 +156,7 @@ class MotionSynthesis():
 
     def changeJointPosition(self, joint_index, joint_pos, frame_count):
         
-        print("changeJointPosition index ", joint_index, " rot ", joint_pos, " frame_count ",frame_count)
+        #print("changeJointPosition index ", joint_index, " rot ", joint_pos, " frame_count ",frame_count)
         
         joint_pos = torch.from_numpy(joint_pos).to(torch.float32).to(self.device)
         
