@@ -36,7 +36,7 @@ Mocap Data
 
 # important: the skeleton needs to be identical in all mocap recordings
 
-# Example: ZED Mocap Recording
+# Example: Xsens Mocap Recording
 mocap_file_path = "data/mocap/"
 mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
 mocap_valid_frame_ranges = [ [ [ 200, 6400 ] ] ]

@@ -38,74 +38,70 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print('Using {} device'.format(device))
 
 """
-Mocap Settings
+Mocap and Training Settings
+
+important: the skeleton needs to be identical in all mocap recordings
 """
 
-# important: the skeleton needs to be identical in all mocap recordings
+# Example: Model Trained on XSens Mocap Recording
+mocap_file_path = "data/mocap"
+mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
+mocap_pos_scale = 1.0
+mocap_fps = 50
 
-# Example: ZED Mocap Recording
+rnn_weights_file = "data/results/weights/rnn_weights_epoch_200"
+
+
+"""
+# Example: Model Trained on ZED Mocap Recording
 mocap_file_path = "../../../Data/Mocap/Zed/Daniel/Solos/fbx_30hz/"
 mocap_files = ["daniel_zed_solo1.fbx"]
-mocap_valid_frame_ranges = [ [ [ 0, 9100 ] ] ]
 mocap_pos_scale = 1.0
 mocap_fps = 30
 
+rnn_weights_file = "../../../Data/Models/MotionContinuation/rnn/results_ZED_Daniel_Solo/weights/rnn_weights_epoch_200"
 """
-# Example: Captury Mocap Recording
+
+"""
+# Example: Model Trained on Captury Mocap Recording
 mocap_file_path = "../../../Data/Mocap/Captury/MotionBank/Solos/fbx_50hz"
 mocap_files = ["zachary_music_improvisation.fbx"]
-mocap_valid_frame_ranges = [ [ [ 1400, 29000 ] ] ]
 mocap_pos_scale = 0.1
 mocap_fps = 50
+
+rnn_weights_file = "../../../Data/Models/MotionContinuation/rnn/results_Captury_Zach_Improvisation/weights/rnn_weights_epoch_200"
 """
 
 """
-# Example: XSens Mocap Recording
+# Example: Model Trained on XSens Mocap Recording
 mocap_file_path = "../../../Data/Mocap/XSens/Stocos/Solos/fbx_50hz"
 mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
-mocap_valid_frame_ranges = [ [ [ 200, 6400 ] ] ]
 mocap_pos_scale = 1.0
 mocap_fps = 50
+
+rnn_weights_file = "../../../Data/Models/MotionContinuation/rnn/results_XSens_Muriel_EmbodiedMachineVariations/weights/rnn_weights_epoch_200"
 """
 
 """
-# Example: Qualisys Mocap Recording
+# Example: Model Trained on Qualisys Mocap Recording
 mocap_file_path = "../../../Data/Mocap/Qualisys/Stocos/Solos/fbx_50hz"
 mocap_files = ["polytopia_fullbody_take2.fbx"]
-mocap_valid_frame_ranges = [ [ [ 570, 9670] ] ]
 mocap_pos_scale = 1.0
 mocap_fps = 50
+
+rnn_weights_file = "../../../Data/Models/MotionContinuation/rnn/results_Qualisys_Muriel_Polytopia/weights/rnn_weights_epoch_200"
 """
 
 """
 Model Settings
+
+important: the model settings must match those used in training
 """
 
 sequence_length = 64
 rnn_layer_dim = 512
 rnn_layer_count = 2
 
-"""
-Training Settings
-"""
-
-# Example: ZED Mocap Recording
-rnn_weights_file = "../rnn/results_ZED_Daniel_Solo/weights/rnn_weights_epoch_200"
-
-"""
-# Example: Captury Mocap Recording
-rnn_weights_file = "../rnn/results_Captury_Zach_Improvisation/weights/rnn_weights_epoch_200"
-"""
-
-"""
-# Example: XSens Mocap Recording
-rnn_weights_file = "../rnn/results_XSens_Muriel_EmbodiedMachineVariations/weights/rnn_weights_epoch_200"
-"""
-
-"""
-# Example: Qualisys Mocap Recording
-rnn_weights_file = "../rnn/results_Qualisys_Muriel_Polytopia/weights/rnn_weights_epoch_200"
-"""
 
 """
 OSC Settings
@@ -116,9 +112,6 @@ osc_send_port = 9004
 
 osc_receive_ip = "0.0.0.0"
 osc_receive_port = 9002
-
-
-
 
 
 """
