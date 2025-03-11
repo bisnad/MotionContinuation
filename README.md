@@ -19,4 +19,4 @@ The following tools are available:
 
 - [rnn_interactive_pos](rnn_interactive_pos)
 
-  A Python-based tool that employs a previously trained motion continuation model to generate synthetic motions in real-time. Contrary to the other tools, this model works with skeleton joint positions that have been obtained by using one of the 2D or 3D pose estimation tools provided by the AI-Toolbox (see MotionAnalysys/PoseEstimation). 
+  A Python-based tool that employs a previously trained motion continuation model to generate synthetic motions in real-time. Contrary to the other tools, this model works with skeleton joint positions that have been obtained by using one of the 2D or 3D pose estimation tools provided by the AI-Toolbox (see MotionAnalysis/PoseEstimation). 

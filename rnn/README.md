@@ -101,7 +101,7 @@ The integer value assigned to the variable `rnn_layer_dim` specifies the number 
 
 ##### Dataset Settings
 
-The dataset consists of pairs of motion sequences that have been extracted from the loaded motion files. The first sequence in the pair represents the motion sequence that is passed to the model as input. The second sequence in the pair represents the continuation of the input sequence. The motion sequences consist of a time series of values that represent a full skeleton pose. In the case of `rnn.py`,  a pose is represented by joint orientations using quaternions. In the case of `rnn_pos.py`, a pose is represented by joint position using 2D or 3D vectors. 
+The dataset consists of pairs of motion sequences that have been extracted from the loaded motion files. The first sequence in the pair represents the motion sequence that is passed to the model as input. The second sequence in the pair represents the continuation of the input sequence. The motion sequences consist of a time series of values that represent at each timestep a full skeleton pose. In the case of `rnn.py`,  a pose is represented by joint orientations using quaternions. In the case of `rnn_pos.py`, a pose is represented by joint positions using 2D or 3D vectors. 
 
 ##### Training Settings
 
@@ -115,7 +115,7 @@ In `rnn.py`, the loss is calculated as a combination of several losses. These ar
 - pos_loss: loss based on the deviation of the predicted joint positions from the correct joint positions. The joint positions are derived from joint rotations using forward kinematics. 
 - quat_loss: loss based on the deviation of the predicted joint rotations from the correct joint rotations.
 
-When running the tool, is employs default training settings. To change these settings, the follows source code in the file rnn.py has to be changed:
+When running the tool, it employs default training settings. To change these settings, the follows source code in the file `rnn.py` has to be changed:
 
 ```
 batch_size = 32
@@ -134,7 +134,7 @@ model_save_interval = 10
 epochs = 200
 ```
 
-The integer value assigned to the variable `batch_size` specifies the number of motion examples in a training batch. The float value assigned to the variable `test_percentage` specifies the percentage of training data used for testing the model. The integer value assigned to the variable `seq_input_length` specifies the length (in number of frames) that is used a input to the model. The integer value assigned to the variable `seq_output_length` specifies the number of frames over which the model predicts the continuation of the input. The float value assigned to the variable learning_rate specifies the initial learning rate. The float value assigned to the variable `norm_loss_scale` specifies the weighted contribution of this loss to the overall training loss. The float value assigned to the variable `pos_loss_scale` specifies its weighted contribution to the overall training loss. The float value assigned to the variable `quat_loss_scale` specifies its weighted contribution to the overall training loss. The float value assigned to the variable `teacher_forcing_prob` specifies the probability of employing teacher forcing instead of curriculum learning for each training batch. The integer value assigned to the variable `model_save_interval` specifies the interval (in number of epochs) at which model weights are stored. The integer value assigned to the variable epochs specifies the number of `epochs` used for training.
+The integer value assigned to the variable `batch_size` specifies the number of motion examples in a training batch. The float value assigned to the variable `test_percentage` specifies the percentage of training data used for testing the model. The integer value assigned to the variable `seq_input_length` specifies the length (in number of frames) that is used a input to the model. The integer value assigned to the variable `seq_output_length` specifies the number of frames over which the model predicts the continuation of the input. The float value assigned to the variable learning_rate specifies the initial learning rate. The float value assigned to the variable `norm_loss_scale` specifies the weighted contribution of the quaternion normalisation loss to the overall training loss. The float value assigned to the variable `pos_loss_scale` specifies its weighted contribution of the predicted joint positions loss to the overall training loss. The float value assigned to the variable `quat_loss_scale` specifies its weighted contribution to the predicted joint rotations loss to the overall training loss. The float value assigned to the variable `teacher_forcing_prob` specifies the probability of employing teacher forcing instead of curriculum learning for each training batch. The integer value assigned to the variable `model_save_interval` specifies the interval (in number of epochs) at which model weights are stored. The integer value assigned to the variable epochs specifies the number of `epochs` used for training.
 
 ##### RNN_Pos Training Settings
 
@@ -142,7 +142,7 @@ In `rnn_pos.py`, there is only one loss function:
 
 - pos_loss: loss based on the deviation of the predicted joint positions from the correct joint positions. The joint positions are directly represented by the training data.
 
-When running the tool, is employs default training settings. To change these settings, the follows source code in the file rnn_pos.py has to be changed:
+When running the tool, it employs default training settings. To change these settings, the follows source code in the file `rnn_pos.py` has to be changed:
 
 ```
 batch_size = 32
@@ -165,19 +165,19 @@ The role of these variables is the same as in `rnn.py`.
 
 Once the dataset has been created and the model initialised, training begins and runs for the number of epochs specified by the user. During training, the tool prints for each epoch a log message to the console that provide information about the training progress. 
 
-An example log message looks produced by rnn.py looks like this:
+An example log message produced by `rnn.py` looks like this:
 
 `epoch 1 : train: 3.2183 test: 3.4099 norm 0.2777 pos 28.5485 quat 0.3730 time 16.57`
 
 The information specifies, from left to right: the epoch number, the loss on the train set, the loss on the test set, the quaternion normalisation loss, the joint position loss, the joint rotation loss, and the time elapsed.
 
-An example log message looks produced by rnn_pos.py looks like this:
+An example log message produced by `rnn_pos.py` looks like this:
 
 `epoch 1 : train: 0.7932 test: 0.6682 pos 0.7932 time 9.11`
 
 The information specifies, from left to right: the epoch number, the loss on the train set, the loss on the test set, the joint position loss, and the time elapsed.
 
-At the end of training, the tool displays the training history as graph plot, and stores the training history both as image and `.csv` file, the last model weights, and an original and predicted motion sequence exported either as BVH or FBX file and GIF animation in case of rnn.py or as PKL file and GIF animation in case of rnn_pos.py.
+At the end of training, the tool displays the training history as graph plot, and stores the training history both as image and `.csv` file, the last model weights, and an original and predicted motion sequence exported either as BVH or FBX file and GIF animation in case of `rnn.py` or as PKL file and GIF animation in case of `rnn_pos.py`.
 
 ### Limitations and Bugs
 
