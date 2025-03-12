@@ -12,7 +12,7 @@ This Python-based tool can be used to interactively control a machine learning m
 
 The software runs within the *premiere* anaconda environment. For this reason, this environment has to be setup beforehand.  Instructions how to setup the *premiere* environment are available as part of the [installation documentation ](https://github.com/bisnad/AIToolbox/tree/main/Installers) in the [AI Toolbox github repository](https://github.com/bisnad/AIToolbox). 
 
-The software can be downloaded by cloning the [MotionContinuation Github repository](https://github.com/bisnad/MotionContinuation). After cloning, the software is located in the MotionContinuation / rnn directory.
+The software can be downloaded by cloning the [MotionContinuation Github repository](https://github.com/bisnad/MotionContinuation). After cloning, the software is located in the MotionContinuation / rnn_interactive_pos directory.
 
 ### Directory Structure
 
@@ -40,7 +40,7 @@ python rnn_interactive_pos.py
 
 ##### Motion Data and Weights Import
 
-During startup, the tool loads one or several mocap capture files and the model weights from a previous training run. By default, the tool loads these files from an example training run whose results are stored in the local data/results folder.  This training run used as motion capture data the output of a 2D Pose Estimation tool that extracted keypoints from a video of a solo improvisation. The model was trained on this data to predict the motion continuation given a short initial motion as input. To load a different training run, the following source code has to be modified in the file `rnn_interactive_pos.py.` 
+During startup, the tool loads one or several mocap capture files and the model weights from a previous training run. By default, the tool loads these files from an example training run whose results are stored in the local data/results folder.  This training run based on 2D Pose Estimation keypoints extracted from a video of a solo improvisation. The model was trained on this data to predict the motion continuation given a short initial motion as input. To load a different training run, the following source code has to be modified in the file `rnn_interactive_pos.py.` 
 
 ```
 mocap_config_file = "data/configs/COCO_config.json"
@@ -58,7 +58,7 @@ The string value assigned to the variable `mocap_config_file`specifies the path 
 
 ##### Model Settings
 
-The model consists of one or several [Long Short Term Memory](https://www.researchgate.net/publication/13853244_Long_Short-Term_Memory) (LSTM) layers. By default, there are 2 layers and 512 units per layer. Also, by default, the model takes as input a motion sequence that is 64 frames long.  These settings need to be identical to the ones used when training the motion continuation model. To use different model settings and/or a different length for the input motion sequence, the the following source code in the file `rnn.py` or `rnn_interactive.py` has to be modified:
+The model consists of one or several [Long Short Term Memory](https://www.researchgate.net/publication/13853244_Long_Short-Term_Memory) (LSTM) layers. By default, there are 2 layers and 512 units per layer. Also, by default, the model takes as input a motion sequence that is 64 frames long.  These settings need to be identical to the ones used when training the motion continuation model. To use different model settings and/or a different length for the input motion sequence, the the following source code in the file`rnn_interactive_pos.py` has to be modified:
 
 ```
 sequence_length = 64
@@ -87,12 +87,32 @@ The following OSC messages are received by the tool:
 - Specifies by index and 2D or 3D position value a joint whose position is overwritten in the input motion sequence : /mocap/setjointpos`<integer index>  <float posx> <float posy> (<float posz>)`
 - Specifies by index and 2D or 3D position value a joint to which a position is added in the input motion sequence : /mocap/changejointpos`<integer index>  <float posx> <float posy> (<float posz>)`
 
+By default, the tool receives OSC messages from any IP address and on port 9002. To change the IP address and/or port, the following code in the file `rnn_interactive_pos.py` has to be changed:
+
+```
+osc_receive_ip = "0.0.0.0"
+osc_receive_port = 9002
+```
+
+The string value assigned to the variable  `osc_receive_ip` specifies the IP address of the computer from which the tool receives OSC messages. "0.0.0.0" represents any IP address. The integer value assigned to the variable `osc_receive_port` specifies the port on which the tool receives OSC messages.
+
+
+
 The software sends the following OSC messages representing the joint positions of the currently predicted motion frame.
 Each message contains all the joint positions and rotations grouped together. In the OSC messages described below, N represents the number of joints.
 
 The following OSC messages are sent by the software:
 
 - joint positions as list of 2D or 3D vectors in world coordinates: `/mocap/0/joint/pos_world <float j1x> <float j1y> (<float j1z>) .... <float jNx> <float jNy> (<float jNz>)` 
+
+By default, the tool sends OSC messages to IP address "127.0.0.1" and to port 9004. To change the IP address and/or port, the following code in the file `rnn_interactive_pos.py` has to be changed:
+
+```
+osc_send_ip = "127.0.0.1"
+osc_send_port = 9004
+```
+
+The string value assigned to the variable  `osc_send_ip` specifies the IP address of the computer to which the tool sends OSC messages. "127.0.0.1" represents the same computer on which the tool is running. The integer value assigned to the variable `osc_send_port` specifies the port to which the tool sends OSC messages.
 
 ### Limitations and Bugs
 
