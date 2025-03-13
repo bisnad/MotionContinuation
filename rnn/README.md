@@ -35,7 +35,7 @@ The tool exists in two versions. The version named `rnn` is used to train the ma
 
 ```
 conda activate premiere
-cd MocapContinuation/rnn
+cd MotionContinuation/rnn
 python rnn.py
 ```
 
@@ -43,7 +43,7 @@ The second version of the tool can be started by double clicking the rnn_pos.bat
 
 ```
 conda activate premiere
-cd MocapContinuation/rnn
+cd MotionContinuation/rnn
 python rnn_pos.py
 ```
 

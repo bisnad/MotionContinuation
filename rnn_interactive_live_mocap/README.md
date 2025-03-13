@@ -1,22 +1,22 @@
-## AI-Toolbox - Motion Continuation - RNN Interactive
+## AI-Toolbox - Motion Continuation - RNN Interactive Live Mocap
 
-![MocapPlayer](./data/media/rnn_interactive_screenshot.JPG)
+![MocapPlayer](./data/media/rnn_interactive_live_mocap_screenshot.JPG)
 
-Figure 1. Screenshot of the RNN Interactive tool. The window on the left shows the output of the model as simple 3D stick figure. The window on the right is a Max/MSP patch that demonstrates how to send OSC messages to control the RNN Interactive tool. 
+Figure 1. Screenshot of the RNN Interactive Live Mocap tool. The window on the left shows the ZED Body Tracking OSC software, the window in the middle shows the output of the motion continuation model rendered as simple 3D stick figure, and the window on the right is a Max/MSP patch that demonstrates how to send OSC messages to control the RNN Interactive Live Mocap tool. 
 
 ### Summary
 
-This Python-based tool can be used to interactively control a machine learning model that has been trained to generate synthetic motion data that represent a continuation of an short motion excerpt.  This tool is not able to train a machine learning model. For training, the [RNN tool](../rnn) can be used. The tool can be interactively controlled by sending it OSC messages. The tool also emits OSC messages that contain the synthetically generated motion data.  
+This Python-based tool can be used to send live motion capture data to a machine learning model. The has been trained to generate synthetic motion data that represents a continuation an initial short motion excerpt. While the other RNN Interactive tools extract the initial motion excerpt from a motion capture file, this tool obtains the motion excerpt from a stream of live motion capture data. This tool is not able to train a machine learning model. For training, the [RNN tool](../rnn) can be used. The tool can be interactively controlled by sending it OSC messages. The tool also emits OSC messages that contain the synthetically generated motion data.  
 
 ### Installation
 
 The software runs within the *premiere* anaconda environment. For this reason, this environment has to be setup beforehand.  Instructions how to setup the *premiere* environment are available as part of the [installation documentation ](https://github.com/bisnad/AIToolbox/tree/main/Installers) in the [AI Toolbox github repository](https://github.com/bisnad/AIToolbox). 
 
-The software can be downloaded by cloning the [MotionContinuation Github repository](https://github.com/bisnad/MotionContinuation). After cloning, the software is located in the MotionContinuation / rnn_interactive directory.
+The software can be downloaded by cloning the [MotionContinuation Github repository](https://github.com/bisnad/MotionContinuation). After cloning, the software is located in the MotionContinuation / rnn_interactive_live_mocap directory.
 
 ### Directory Structure
 
-- rnn_interactive
+- rnn_interactive_live_mocap
   - common (contains python scripts for handling mocap data)
   - controls (contains an example Max/MSP patch for interactively controlling the tool)
   - data 
@@ -29,23 +29,32 @@ The software can be downloaded by cloning the [MotionContinuation Github reposit
 
 #### Start
 
-The tool can be started either by double clicking the `rnn_interactive.bat` (Windows) or `rnn_interactive.sh` (MacOS) shell scripts or by typing the following commands into the Anaconda terminal:
+For the tool to work, it needs to receive motion data from a live motion capture software. It is recommended to first start the live motion capture software before starting the tool. In the default example, the tool expects live motion data of a single performer that is tracked using a ZED camera in combination with one of the body tracking tools: body_tracking_osc or body_tracking_multi-camera_osc. These tools are available as part of the MotionAnalysis category of tools. To run the body tracking software in combination with the default motion continuation tool, the body tracking software has to use the ZED Body34 skeleton representation and send its motion data as OSC to port 9002. For this, the body tracking software has to be started from the Windows command promp. 
+
+The following example shows how to start the body34 version of the body_tracking_osc tool with live camera input, a target IP addresses of 127.0.0.1, and a target port of 9002 from the Windows command prompt.
+
+```
+cd MotionAnalysis/PoseEstimation/ZED_C++/body_tracking_osc
+body34_tracking_osc 127.0.0.1 9002
+```
+
+Once the body tracking software is running, the motion continuation tool  can be started either by double clicking the `rnn_interactive.bat` (Windows) or `rnn_interactive.sh` (MacOS) shell scripts or by typing the following commands into the Anaconda terminal:
 
 ```
 conda activate premiere
-cd MotionContinuation/rnn_interactive
+cd MotionContinuation/rnn_interactive_live_mocap
 python rnn_interactive.py
 ```
 
 ##### Motion Data and Weights Import
 
-During startup, the tool loads one or several mocap capture files and the model weights from a previous training run. By default, the tool loads these files from an example training run whose results are stored in the local data/results folder.  This training run is based on a XSens recording of a solo improvisation. The model was trained on this data to predict the motion continuation given a short initial motion as input. To load a different training run, the following source code has to be modified in the file `rnn_interactive.py.` 
+During startup, the tool loads one or several motion capture file(s) and the model weights from a previous training run. The motion capture file(s) are needed as reference and should contain the same type of motion data that is received live from the body_tracking_osc tool.  By default, the tool loads these files from an example training run whose results are stored in the local data/results folder.  This training run is based on a ZED Body34 recording of a solo improvisation. The model was trained on this data to predict the motion continuation given a short initial motion as input. To load a different training run, the following source code has to be modified in the file `rnn_interactive.py.` 
 
 ```
 mocap_file_path = "data/mocap"
-mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
+mocap_files = ["daniel_zed_solo1.fbx"]
 mocap_pos_scale = 1.0
-mocap_fps = 50
+mocap_fps = 30
 
 rnn_weights_file = "data/results/weights/rnn_weights_epoch_200"
 ```
@@ -70,7 +79,7 @@ At the beginning, the tool passes a short motion sequence from one of the motion
 
 ### Graphical User Interface
 
-The tool provides a minimal GUI  for starting and stopping the motion continuation and for displaying the generated motions as a simple 3D stick figure (see Figure 1 left side).
+The tool provides a minimal GUI  for starting and stopping the motion continuation and for displaying the generated motions as a simple 3D stick figure (see Figure 1 middle window).
 
 ### OSC Communication
 
@@ -78,8 +87,7 @@ The tool receives OSC messages that modify its behaviour. Some OSC messages init
 
 The following OSC messages are received by the tool:
 
-- Specifies by index the motion capture file from which a new input motion sequence is extract to initialise the model : `/mocap/seqindex <integer index>`
-- Specifies by index the end frame within the current motion capture file which a new input motion sequence is extract to initialise the model : `/mocap/seqinput <integer index>`
+- Extract from the live stream of incoming motion data a short motion sequence and pass it as input motion sequence to the motion continuation model: `/mocap/initliveseq`
 - Specifies by index and quaternion value a joint whose rotation is overwritten in the input motion sequence : /mocap/setjointrot `<integer index>  <float rotw> <float rotx> <float roty> <float rotz>`
 - Specifies by index and quaternion value a joint to which a rotation is added in the input motion sequence : /mocap/changejointrot`<integer index>  <float rotw> <float rotx> <float roty> <float rotz>`
 

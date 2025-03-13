@@ -39,15 +39,17 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print('Using {} device'.format(device))
 
 """
-Mocap Settings
+Mocap and Training Settings
 """
 
 # Example: ZED Mocap Recording
-mocap_file_path = "../../../Data/Mocap/Zed/Daniel/Solos/fbx_30hz/"
+mocap_file_path = "data/mocap"
 mocap_files = ["daniel_zed_solo1.fbx"]
 mocap_valid_frame_ranges = [ [ [ 0, 9100 ] ] ]
 mocap_pos_scale = 1.0
 mocap_fps = 30
+
+rnn_weights_file = "data/results/weights/rnn_weights_epoch_200"
 
 """
 Model Settings
@@ -56,13 +58,6 @@ Model Settings
 sequence_length = 64
 rnn_layer_dim = 512
 rnn_layer_count = 2
-
-"""
-Training Settings
-"""
-
-# Example: ZED Mocap Recording
-rnn_weights_file = "../rnn/results_ZED_Daniel_Solo/weights/rnn_weights_epoch_200"
 
 
 """

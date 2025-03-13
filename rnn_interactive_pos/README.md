@@ -34,7 +34,7 @@ The tool can be started either by double clicking the `rnn_interactive_pos.bat` 
 
 ```
 conda activate premiere
-cd MocapContinuation/rnn_interactive_pos
+cd MotionContinuation/rnn_interactive_pos
 python rnn_interactive_pos.py
 ```
 

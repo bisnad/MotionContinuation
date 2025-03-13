@@ -55,6 +55,8 @@ class MotionControl():
         
     def updateLiveSeq(self, address, *args):
 
+        print("updateLiveSeq")
+
         osc_address = address
         osc_values = args
         
@@ -73,6 +75,8 @@ class MotionControl():
         self.synthesis.setOrigSeqBlend(blend)
         
     def setRand(self, address, *args):
+
+        print("setRand")
         
         rand = args[0]
         
