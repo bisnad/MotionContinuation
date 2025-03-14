@@ -6,7 +6,7 @@ Figure 1. Screenshot of the RNN Interactive Live Mocap tool. The window on the l
 
 ### Summary
 
-This Python-based tool can be used to send live motion capture data to a machine learning model. The has been trained to generate synthetic motion data that represents a continuation an initial short motion excerpt. While the other RNN Interactive tools extract the initial motion excerpt from a motion capture file, this tool obtains the motion excerpt from a stream of live motion capture data. This tool is not able to train a machine learning model. For training, the [RNN tool](../rnn) can be used. The tool can be interactively controlled by sending it OSC messages. The tool also emits OSC messages that contain the synthetically generated motion data.  
+This Python-based tool can be used to send live motion capture data to a machine learning model. This model has been trained to generate synthetic motion data that represents a continuation an initial short motion excerpt. While the other RNN Interactive tools extract the initial motion excerpt from a motion capture file, this tool obtains the motion excerpt from a stream of live motion capture data. This tool is not able to train a machine learning model. For training, the [RNN tool](../rnn) can be used. The tool can be interactively controlled by sending it OSC messages. The tool also emits OSC messages that contain the synthetically generated motion data.  
 
 ### Installation
 
@@ -38,7 +38,7 @@ cd MotionAnalysis/PoseEstimation/ZED_C++/body_tracking_osc
 body34_tracking_osc 127.0.0.1 9002
 ```
 
-Once the body tracking software is running, the motion continuation tool  can be started either by double clicking the `rnn_interactive.bat` (Windows) or `rnn_interactive.sh` (MacOS) shell scripts or by typing the following commands into the Anaconda terminal:
+Once the body tracking software is running, the motion continuation tool can be started either by double clicking the `rnn_interactive.bat` (Windows) or `rnn_interactive.sh` (MacOS) shell scripts or by typing the following commands into the Anaconda terminal:
 
 ```
 conda activate premiere

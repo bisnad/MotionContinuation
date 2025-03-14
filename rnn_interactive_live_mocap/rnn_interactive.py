@@ -45,7 +45,6 @@ Mocap and Training Settings
 # Example: ZED Mocap Recording
 mocap_file_path = "data/mocap"
 mocap_files = ["daniel_zed_solo1.fbx"]
-mocap_valid_frame_ranges = [ [ [ 0, 9100 ] ] ]
 mocap_pos_scale = 1.0
 mocap_fps = 30
 
