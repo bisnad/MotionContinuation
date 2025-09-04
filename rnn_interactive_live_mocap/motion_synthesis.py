@@ -3,7 +3,6 @@ from torch import nn
 import numpy as np
 
 from common.quaternion import qmul, qrot, qnormalize_np, qfix, slerp
-#from common.quaternion_torch import slerp
 
 config = {"skeleton": None,
           "model": None,
@@ -23,6 +22,13 @@ test_rot_norm = nn.functional.normalize(test_rot, p=2, dim=0)
 
 test_rot_norm
 """
+
+def fix_quat_sign(q1, q2):
+    # q1, q2 are tensors of shape (..., 4)
+    # Returns q2, possibly with flipped sign so that dot(q1, q2) >= 0
+    dot_product = torch.sum(q1 * q2, dim=-1, keepdim=True)
+    sign = torch.where(dot_product < 0, -1.0, 1.0)
+    return q2 * sign
 
 class MotionSynthesis():
     
@@ -277,15 +283,17 @@ class MotionSynthesis():
         pred_pose_np = self.pred_pose.detach().cpu().numpy()
         blend_pose_np = np.zeros_like(live_pose_np)
         
-        for ji in range(self.joint_count): 
-                current_quat = live_pose_np[0, ji, :]
-                target_quat = pred_pose_np[0, ji, :]
-                quat_mix = blend_factor
-                mix_quat = slerp(current_quat, target_quat, quat_mix )
-                
-                blend_pose_np[0, ji] = mix_quat
+        for ji in range(self.joint_count):
+            current_quat = live_pose_np[0, ji, :]
+            target_quat = pred_pose_np[0, ji, :]
+            # Fix sign discontinuity
+            target_quat = fix_quat_sign(torch.tensor(current_quat), torch.tensor(target_quat)).numpy()
+            quat_mix = blend_factor
+            mix_quat = slerp(current_quat, target_quat, quat_mix)
+            blend_pose_np[0, ji] = mix_quat
         
         blend_pose = torch.tensor(blend_pose_np).to(self.device)
+        blend_pose = nn.functional.normalize(blend_pose, p=2, dim=-1)
 
         #blend_pose = live_pose
 

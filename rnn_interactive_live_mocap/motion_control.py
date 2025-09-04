@@ -55,7 +55,7 @@ class MotionControl():
         
     def updateLiveSeq(self, address, *args):
 
-        print("updateLiveSeq")
+        #print("updateLiveSeq")
 
         osc_address = address
         osc_values = args

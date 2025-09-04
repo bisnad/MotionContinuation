@@ -48,7 +48,7 @@ mocap_files = ["daniel_zed_solo1.fbx"]
 mocap_pos_scale = 1.0
 mocap_fps = 30
 
-rnn_weights_file = "data/results/weights/rnn_weights_epoch_200"
+rnn_weights_file = "data/results/weights/rnn_weights_epoch_200_4"
 
 """
 Model Settings
@@ -67,7 +67,7 @@ osc_send_ip = "127.0.0.1"
 osc_send_port = 9004
 
 osc_receive_ip = "0.0.0.0"
-osc_receive_port = 9002
+osc_receive_port = 9007
 
 
 
