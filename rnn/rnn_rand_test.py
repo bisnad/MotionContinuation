@@ -36,7 +36,6 @@ Mocap Data
 
 # important: the skeleton needs to be identical in all mocap recordings
 
-"""
 # Example: Xsens Mocap Recording
 mocap_file_path = "data/mocap/"
 mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
@@ -44,9 +43,8 @@ mocap_valid_frame_ranges = [ [ [ 200, 6400 ] ] ]
 mocap_pos_scale = 1.0
 mocap_fps = 50
 mocap_loss_weights_file = None
+
 """
-
-
 # Example: ZED Mocap Recording
 mocap_file_path = "E:/Data/mocap/Daniel/Zed/fbx"
 mocap_files = ["daniel_fooling_around.fbx", "daniel_fooling_around2.fbx"]
@@ -54,6 +52,7 @@ mocap_valid_frame_ranges = [ [ [ 100, 3000 ] ], [ [ 100, 5000 ] ] ]
 mocap_pos_scale = 1.0
 mocap_fps = 30
 mocap_loss_weights_file = "data/configs/zed_body34_joint_loss_weights.json"
+"""
 
 """
 mocap_file_path = ""
@@ -100,10 +99,14 @@ Model Settings
 
 rnn_layer_dim = 512
 rnn_layer_count = 2
+rnn_mixture_count = 3
 
 save_weights = True
-load_weights = False
+load_weights = True
+#rnn_weights_file = "../../../Data/Models/MotionContinuation/rnn/results_XSens_Muriel_EmbodiedMachineVariations/weights/rnn_weights_epoch_200"
 rnn_weights_file = "results/weights/rnn_weights_epoch_200"
+
+
 
 """
 Training settings
@@ -277,33 +280,53 @@ print("y_batch s ", y_batch.shape)
 Reccurent Model
 """
 
-class Reccurent(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, layer_count):
-        super(Reccurent, self).__init__()
+class MixtureRNN(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, layer_count, n_experts=3):
+        super(MixtureRNN, self).__init__()
         
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.layer_count = layer_count
-        self.output_dim = output_dim
-            
-        rnn_layers = []
+        self.lstm = nn.LSTM(input_dim, hidden_dim, layer_count, batch_first=True)
+        self.n_experts = n_experts
         
-        rnn_layers.append(("rnn", nn.LSTM(self.input_dim, self.hidden_dim, self.layer_count, batch_first=True)))
-        self.rnn_layers = nn.Sequential(OrderedDict(rnn_layers))
+        # Multiple expert heads
+        self.experts = nn.ModuleList([
+            nn.Linear(hidden_dim, output_dim) for _ in range(n_experts)
+        ])
         
-        dense_layers = []
-        dense_layers.append(("dense", nn.Linear(self.hidden_dim, self.output_dim)))
-        self.dense_layers = nn.Sequential(OrderedDict(dense_layers))
+        # Gating network to weight experts
+        self.gating = nn.Sequential(
+            nn.Linear(hidden_dim, n_experts),
+            nn.Softmax(dim=1)
+        )
     
     def forward(self, x):
-        x, (_, _) = self.rnn_layers(x)
+        lstm_out, _ = self.lstm(x)
+        lstm_out = lstm_out[:, -1, :]
         
-        x = x[:, -1, :] # only last time step 
-        x = self.dense_layers(x)
+        # Get expert outputs
+        expert_outputs = [expert(lstm_out) for expert in self.experts]
+        expert_outputs = torch.stack(expert_outputs, dim=1)  # [batch, n_experts, output_dim]
         
-        return x
+        # Get gating weights
+        gates = self.gating(lstm_out).unsqueeze(-1)  # [batch, n_experts, 1]
+        
+        # Weighted combination
+        output = torch.sum(gates * expert_outputs, dim=1)
+        
+        return output, expert_outputs, gates
 
-rnn = Reccurent(pose_dim, rnn_layer_dim, pose_dim, rnn_layer_count).to(device)
+def sample_from_mixture(expert_outputs, gates):
+    """Sample from mixture of experts probabilistically"""
+    batch_size = expert_outputs.shape[0]
+    sampled_outputs = []
+    
+    for b in range(batch_size):
+        # Sample expert based on gating probabilities
+        expert_idx = torch.multinomial(gates[b].squeeze(), 1).item()
+        sampled_outputs.append(expert_outputs[b, expert_idx])
+    
+    return torch.stack(sampled_outputs)
+
+rnn = MixtureRNN(pose_dim, rnn_layer_dim, pose_dim, rnn_layer_count, n_experts=rnn_mixture_count).to(device)
 print(rnn)
 
 # test Reccurent model
@@ -311,11 +334,17 @@ print(rnn)
 batch_x, _ = next(iter(train_loader))
 batch_x = batch_x.to(device)
 
-print(batch_x.shape)
+print("batch_x s ", batch_x.shape)
 
-test_y2 = rnn(batch_x)
+batch_out, batch_expert_out, batch_gates = rnn(batch_x)
 
-print(test_y2.shape)
+print("batch_out s ", batch_out.shape)
+print("batch_expert_out s ", batch_expert_out.shape)
+print("batch_gates s ", batch_gates.shape)
+
+batch_y = sample_from_mixture(batch_expert_out, batch_gates)
+
+print("batch_y s ", batch_y.shape)
 
 if load_weights == True:
     rnn.load_state_dict(torch.load(rnn_weights_file))
@@ -460,150 +489,127 @@ def loss(y, yhat):
     
     return _total_loss, _norm_loss, _pos_loss, _quat_loss
 
+def probabilistic_loss(y, yhat, mu=None, logvar=None, beta=1e-4):
+    # Original losses
+    _norm_loss = norm_loss(yhat)
+    _pos_loss = pos_loss(y, yhat)
+    _quat_loss = quat_loss(y, yhat)
+    
+    _total_loss = (_norm_loss * norm_loss_scale + 
+                   _pos_loss * pos_loss_scale + 
+                   _quat_loss * quat_loss_scale)
+    
+    # Add KL divergence for variational model
+    if mu is not None and logvar is not None:
+        kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        _total_loss += beta * kl_loss
+        return _total_loss, _norm_loss, _pos_loss, _quat_loss, kl_loss
+    
+    return _total_loss, _norm_loss, _pos_loss, _quat_loss
+
 def train_step(pose_sequences, target_poses, teacher_forcing):
-    
     rnn.train()
-
-    #print("ar_train_step")    
-    #print("teacher_forcing ", teacher_forcing)
-    #print("pose_sequences s ", pose_sequences.shape)
-    #print("target_poses s ", target_poses.shape)
-
-    #_input_poses = pose_sequences.detach().clone()    
-    _input_poses = pose_sequences  
+    
+    _input_poses = pose_sequences
     output_poses_length = target_poses.shape[1]
-    
-    #print("output_poses_length ", output_poses_length)
-    
-    _pred_poses_for_loss = []
-    _target_poses_for_loss = []
-    
-    for o_i in range(1, output_poses_length):n
-        
-        #print("_input_poses s ", _input_poses.shape)
-        
-        _pred_poses = rnn(_input_poses)
-        _pred_poses = torch.unsqueeze(_pred_poses, axis=1)
-        
-        #print("_pred_poses s ", _pred_poses.shape)
-        
-        _target_poses = target_poses[:,o_i,:].detach().clone()
-        _target_poses = torch.unsqueeze(_target_poses, axis=1)
 
-        #print("_target_poses s ", _target_poses.shape)
-        
-        _pred_poses_for_loss.append(_pred_poses)
-        _target_poses_for_loss.append(_target_poses)
-        
-        # shift input pose seqeunce one pose to the right
-        # remove pose from beginning input pose sequence
-        # detach necessary to avoid error concerning running backprob a second time
+    pred_poses_list = []
+    target_poses_list = []
+    mu_list = []
+    logvar_list = []
+
+    for o_i in range(1, output_poses_length):
+        # Forward pass with reparameterization
+        pred_pose, mu, logvar = rnn(_input_poses)
+        pred_pose = torch.unsqueeze(pred_pose, axis=1)
+
+        target_pose = target_poses[:, o_i, :].detach().clone()
+        target_pose = torch.unsqueeze(target_pose, axis=1)
+
+        pred_poses_list.append(pred_pose)
+        target_poses_list.append(target_pose)
+        mu_list.append(mu)
+        logvar_list.append(logvar)
+
+        # Prepare next input for autoregressive continuation
         _input_poses = _input_poses[:, 1:, :].detach().clone()
-        _target_poses = _target_poses.detach().clone()
-        _pred_poses = _pred_poses.detach().clone()
-        
-        # add predicted or target pose to end of input pose sequence
-        if teacher_forcing == True:
-            _input_poses = torch.concat((_input_poses, _target_poses), axis=1)
-        else:
-            #_pred_poses = torch.reshape(_pred_poses, (_pred_poses.shape[0], 1, joint_count, joint_dim))
-            _input_poses = torch.cat((_input_poses, _pred_poses), axis=1)
-            
-        #print("_input_poses s ", _input_poses.shape)
+        target_pose = target_pose.detach().clone()
+        pred_pose = pred_pose.detach().clone()
 
-        
-        #print("_input_poses 2 s ", _input_poses.shape)
-        
-    _pred_poses_for_loss = torch.cat(_pred_poses_for_loss, dim=1)
-    _target_poses_for_loss = torch.cat(_target_poses_for_loss, dim=1)
-    
-    #print("_pred_poses_for_loss 2 s ", _pred_poses_for_loss.shape)
-    #print("_target_poses_for_loss 2 s ", _target_poses_for_loss.shape)
-    
-    _loss, _norm_loss, _pos_loss, _quat_loss = loss(_target_poses_for_loss, _pred_poses_for_loss) 
-    
-    # Backpropagation
+        if teacher_forcing:
+            _input_poses = torch.cat((_input_poses, target_pose), axis=1)
+        else:
+            _input_poses = torch.cat((_input_poses, pred_pose), axis=1)
+
+    pred_poses_all = torch.cat(pred_poses_list, dim=1)
+    target_poses_all = torch.cat(target_poses_list, dim=1)
+
+    # Combine all latent variables for batch KL computation
+    mu_all = torch.stack(mu_list, dim=1)
+    logvar_all = torch.stack(logvar_list, dim=1)
+
+    # Compute total probabilistic loss with KL term
+    _loss, _norm_loss, _pos_loss, _quat_loss, _kl_loss = probabilistic_loss(
+        target_poses_all, pred_poses_all, mu=mu_all, logvar=logvar_all, beta=1e-4
+    )
+
     optimizer.zero_grad()
     _loss.backward()
     optimizer.step()
-    
-    #print("_ar_loss_total mean s ", _ar_loss_total.shape)
-    
-    #return _ar_loss, _ar_norm_loss, _ar_quat_loss
-    
-    return _loss, _norm_loss, _pos_loss, _quat_loss
+
+    return _loss, _norm_loss, _pos_loss, _quat_loss, _kl_loss
 
 def test_step(pose_sequences, target_poses, teacher_forcing):
-    
     rnn.eval()
 
-    #print("ar_train_step")    
-    #print("teacher_forcing ", teacher_forcing)
-    #print("pose_sequences s ", pose_sequences.shape)
-    #print("target_poses s ", target_poses.shape)
-
-    #_input_poses = pose_sequences.detach().clone()    
-    _input_poses = pose_sequences  
-    output_poses_length = target_poses.shape[1]
-    
-    #print("output_poses_length ", output_poses_length)
-    
-    _pred_poses_for_loss = []
-    _target_poses_for_loss = []
-    
     with torch.no_grad():
     
+        _input_poses = pose_sequences
+        output_poses_length = target_poses.shape[1]
+
+        pred_poses_list = []
+        target_poses_list = []
+        mu_list = []
+        logvar_list = []
+
         for o_i in range(1, output_poses_length):
-            
-            #print("_input_poses s ", _input_poses.shape)
-            
-            _pred_poses = rnn(_input_poses)
-            _pred_poses = torch.unsqueeze(_pred_poses, axis=1)
-            
-            #print("_pred_poses s ", _pred_poses.shape)
-            
-            _target_poses = target_poses[:,o_i,:].detach().clone()
-            _target_poses = torch.unsqueeze(_target_poses, axis=1)
-    
-            #print("_target_poses s ", _target_poses.shape)
-            
-            _pred_poses_for_loss.append(_pred_poses)
-            _target_poses_for_loss.append(_target_poses)
-            
-            # shift input pose seqeunce one pose to the right
-            # remove pose from beginning input pose sequence
-            # detach necessary to avoid error concerning running backprob a second time
+            # Forward pass with reparameterization
+            pred_pose, mu, logvar = rnn(_input_poses)
+            pred_pose = torch.unsqueeze(pred_pose, axis=1)
+
+            target_pose = target_poses[:, o_i, :].detach().clone()
+            target_pose = torch.unsqueeze(target_pose, axis=1)
+
+            pred_poses_list.append(pred_pose)
+            target_poses_list.append(target_pose)
+            mu_list.append(mu)
+            logvar_list.append(logvar)
+
+            # Prepare next input for autoregressive continuation
             _input_poses = _input_poses[:, 1:, :].detach().clone()
-            _target_poses = _target_poses.detach().clone()
-            _pred_poses = _pred_poses.detach().clone()
-            
-            # add predicted or target pose to end of input pose sequence
-            if teacher_forcing == True:
-                _input_poses = torch.concat((_input_poses, _target_poses), axis=1)
+            target_pose = target_pose.detach().clone()
+            pred_pose = pred_pose.detach().clone()
+
+            if teacher_forcing:
+                _input_poses = torch.cat((_input_poses, target_pose), axis=1)
             else:
-                #_pred_poses = torch.reshape(_pred_poses, (_pred_poses.shape[0], 1, joint_count, joint_dim))
-                _input_poses = torch.cat((_input_poses, _pred_poses), axis=1)
-                
-            #print("_input_poses s ", _input_poses.shape)
-    
-            
-            #print("_input_poses 2 s ", _input_poses.shape)
-            
-        _pred_poses_for_loss = torch.cat(_pred_poses_for_loss, dim=1)
-        _target_poses_for_loss = torch.cat(_target_poses_for_loss, dim=1)
-        
-        #print("_pred_poses_for_loss 2 s ", _pred_poses_for_loss.shape)
-        #print("_target_poses_for_loss 2 s ", _target_poses_for_loss.shape)
-        
-        _loss, _norm_loss, _pos_loss, _quat_loss = loss(_target_poses_for_loss, _pred_poses_for_loss) 
-    
-    #print("_ar_loss_total mean s ", _ar_loss_total.shape)
-    
-    #return _ar_loss, _ar_norm_loss, _ar_quat_loss
-    
+                _input_poses = torch.cat((_input_poses, pred_pose), axis=1)
+
+        pred_poses_all = torch.cat(pred_poses_list, dim=1)
+        target_poses_all = torch.cat(target_poses_list, dim=1)
+
+        # Combine all latent variables for batch KL computation
+        mu_all = torch.stack(mu_list, dim=1)
+        logvar_all = torch.stack(logvar_list, dim=1)
+
+        # Compute total probabilistic loss with KL term
+        _loss, _norm_loss, _pos_loss, _quat_loss, _kl_loss = probabilistic_loss(
+            target_poses_all, pred_poses_all, mu=mu_all, logvar=logvar_all, beta=1e-4
+        )
+
     rnn.train()
-    
-    return _loss, _norm_loss, _pos_loss, _quat_loss
+
+    return _loss, _norm_loss, _pos_loss, _quat_loss, _kl_loss
 
 
 def train(train_dataloader, test_dataloader, epochs):
@@ -614,6 +620,7 @@ def train(train_dataloader, test_dataloader, epochs):
     loss_history["norm"] = []
     loss_history["pos"] = []
     loss_history["quat"] = []
+    loss_history["kl"] = []
 
     for epoch in range(epochs):
         start = time.time()
@@ -622,6 +629,7 @@ def train(train_dataloader, test_dataloader, epochs):
         _norm_loss_per_epoch = []
         _pos_loss_per_epoch = []
         _quat_loss_per_epoch = []
+        _kl_loss_per_epoch = []
 
         for train_batch in train_dataloader:
             input_pose_sequences = train_batch[0].to(device)
@@ -629,22 +637,25 @@ def train(train_dataloader, test_dataloader, epochs):
             
             use_teacher_forcing = np.random.uniform() < teacher_forcing_prob
             
-            _loss, _norm_loss, _pos_loss, _quat_loss = train_step(input_pose_sequences, target_poses, use_teacher_forcing)
+            _loss, _norm_loss, _pos_loss, _quat_loss, _kl_loss = train_step(input_pose_sequences, target_poses, use_teacher_forcing)
             
             _loss = _loss.detach().cpu().numpy()
             _norm_loss = _norm_loss.detach().cpu().numpy()
             _pos_loss = _pos_loss.detach().cpu().numpy()
             _quat_loss = _quat_loss.detach().cpu().numpy()
+            _kl_loss = _kl_loss.detach().cpu().numpy()
             
             _train_loss_per_epoch.append(_loss)
             _norm_loss_per_epoch.append(_norm_loss)
             _pos_loss_per_epoch.append(_pos_loss)
             _quat_loss_per_epoch.append(_quat_loss)
+            _kl_loss_per_epoch.append(_kl_loss)
 
         _train_loss_per_epoch = np.mean(np.array(_train_loss_per_epoch))
         _norm_loss_per_epoch = np.mean(np.array(_norm_loss_per_epoch))
         _pos_loss_per_epoch = np.mean(np.array(_pos_loss_per_epoch))
         _quat_loss_per_epoch = np.mean(np.array(_quat_loss_per_epoch))
+        _kl_loss_per_epoch = np.mean(np.array(_kl_loss_per_epoch))
 
         _test_loss_per_epoch = []
         
@@ -654,7 +665,7 @@ def train(train_dataloader, test_dataloader, epochs):
             
             use_teacher_forcing = np.random.uniform() < teacher_forcing_prob
             
-            _loss, _, _, _ = test_step(input_pose_sequences, target_poses, use_teacher_forcing)
+            _loss, _, _, _, _quat_loss = test_step(input_pose_sequences, target_poses, use_teacher_forcing)
             #_loss, _, _ = test_step(input_pose_sequences, target_poses)
             
             _loss = _loss.detach().cpu().numpy()
@@ -671,10 +682,11 @@ def train(train_dataloader, test_dataloader, epochs):
         loss_history["norm"].append(_norm_loss_per_epoch)
         loss_history["pos"].append(_pos_loss_per_epoch)
         loss_history["quat"].append(_quat_loss_per_epoch)
+        loss_history["kl"].append(_kl_loss_per_epoch)
         
         scheduler.step()
         
-        print ('epoch {} : train: {:01.4f} test: {:01.4f} norm {:01.4f} pos {:01.4f} quat {:01.4f} time {:01.2f}'.format(epoch + 1, _train_loss_per_epoch, _test_loss_per_epoch, _norm_loss_per_epoch, _pos_loss_per_epoch, _quat_loss_per_epoch, time.time()-start))
+        print ('epoch {} : train: {:01.4f} test: {:01.4f} norm {:01.4f} pos {:01.4f} quat {:01.4f} kl {:01.4f} time {:01.2f}'.format(epoch + 1, _train_loss_per_epoch, _test_loss_per_epoch, _norm_loss_per_epoch, _pos_loss_per_epoch, _quat_loss_per_epoch, _kl_loss_per_epoch, time.time()-start))
     
     return loss_history
 
@@ -758,7 +770,7 @@ def create_pred_sequence(pose_sequence, pose_count):
     for i in range(pose_count):
         
         with torch.no_grad():
-            pred_pose = rnn(torch.unsqueeze(next_seq, axis=0))
+            pred_pose, _, _ = rnn(torch.unsqueeze(next_seq, axis=0))
 
         # normalize pred pose
         pred_pose = torch.squeeze(pred_pose)
@@ -807,4 +819,7 @@ export_sequence_fbx(pred_sequence, "results/anims/pred_sequence_epoch_{}_seq_sta
 #export_sequence_bvh(pred_sequence, "results/anims/pred_sequence_epoch_{}_seq_start_{}_length_{}.bvh".format(epochs, seq_start, seq_length))
 
 
+for i in range(4):
+    pred_sequence = create_pred_sequence(orig_sequence[seq_start:seq_start+seq_input_length], seq_length)
+    export_sequence_anim(pred_sequence, "results/anims/pred_sequence_epoch_{}_seq_start_{}_length_{}_try_{}.gif".format(epochs, seq_start, seq_length, i))
 
