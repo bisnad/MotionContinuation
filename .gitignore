@@ -34,3 +34,7 @@ rnn/common/__pycache__/quaternion.cpython-310.pyc
 /td/common/__pycache__
 /td/.spyproject
 /rnn_interactive_live_mocap_v2/.spyproject
+/td/results/anims
+/td_interactive/.spyproject
+/td_interactive/__pycache__
+/td_interactive/common/__pycache__
