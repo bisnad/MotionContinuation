@@ -18,6 +18,7 @@ import math
 import time
 import json
 import os
+import copy
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
 
@@ -43,7 +44,7 @@ print(f"Using {device} device")
 
 mocap_file_path = "E:/Data/mocap/stocos/Solos/Canal_14-08-2023/fbx_50hz/"
 mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
-mocap_valid_frame_ranges = [ [ [ 200, 6350 ] ] ]
+mocap_valid_time_ranges = [ [ [ 4.0, 127.0 ] ] ]  # in seconds
 mocap_pos_scale = 1.0
 mocap_fps = 50
 
@@ -54,7 +55,7 @@ train_root_trajectory = False
 # Save Paths Settings
 # -------------------------------------------------------------------------------------------------
 
-save_path = "results_Stocos_XSens_Embodied_Machine_v2/"
+save_path = "results_Stocos_XSens_Embodied_Machine/"
 save_weights_path = save_path + "weights/"
 save_history_path = save_path + "history/"
 save_anims_path = save_path + "anims/"
@@ -111,13 +112,14 @@ view_line_width = 1.0
 view_size = 4.0
 
 # -------------------------------------------------------------------------------------------------
-# Utility: Variable Timestamp Resampling
+# Utility: Variable Timestamp Resampling (Time-Range Filtered)
 # -------------------------------------------------------------------------------------------------
 
-def resample_mocap_data(mocap_data, target_fps):
+def resample_mocap_data(mocap_data, target_fps, time_ranges):
     """
-    Interpolates and resamples variable-rate keyframe data to a consistent 
-    joint array block shaped (num_frames, num_joints, 3) at target_fps.
+    Interpolates and resamples variable-rate keyframe data to consistent 
+    joint array blocks shaped (num_frames, num_joints, 3) at target_fps,
+    only extracting the specified continuous segments defined in time_ranges.
     """
     times_dict = mocap_data["motion"].get("times", {})
     joints = mocap_data["skeleton"]["joints"]
@@ -126,18 +128,14 @@ def resample_mocap_data(mocap_data, target_fps):
     pos_local = mocap_data["motion"]["pos_local"]
     rot_local_euler = mocap_data["motion"]["rot_local_euler"]
     
-    # Resolves structure mismatch between old BVH (ndarrays) and new FBX (lists of arrays)
     def get_joint_data(data, j_idx):
         if isinstance(data, list):
             return data[j_idx]
         else:
             return data[:, j_idx, :]
             
-    # Calculate unified global time bounds across all present keyframes
-    min_time = float('inf')
-    max_time = float('-inf')
+    # Build global original time arrays for each joint
     joint_times_list = []
-    
     for j_idx, j_name in enumerate(joints):
         if j_name in times_dict:
             j_times = times_dict[j_name]
@@ -145,55 +143,53 @@ def resample_mocap_data(mocap_data, target_fps):
             j_frames = len(get_joint_data(pos_local, j_idx))
             orig_fps = mocap_data.get("frame_rate", target_fps)
             j_times = np.arange(j_frames) / orig_fps
-        
         joint_times_list.append(j_times)
-        if len(j_times) > 0:
-            min_time = min(min_time, j_times[0])
-            max_time = max(max_time, j_times[-1])
-            
-    if min_time == float('inf'):
-        min_time, max_time = 0.0, 0.0
         
-    # Standardize our times basis using user specified fps
-    target_times = np.arange(min_time, max_time, 1.0 / target_fps)
-    num_frames = len(target_times)
+    resampled_segments = []
     
-    new_pos_local = np.zeros((num_frames, num_joints, 3))
-    new_rot_local_euler = np.zeros((num_frames, num_joints, 3))
-    
-    for j_idx in range(num_joints):
-        j_times = joint_times_list[j_idx]
-        j_pos = get_joint_data(pos_local, j_idx)
-        j_rot = get_joint_data(rot_local_euler, j_idx)
+    for t_range in time_ranges:
+        start_time, end_time = t_range[0], t_range[1]
+        target_times = np.arange(start_time, end_time, 1.0 / target_fps)
+        num_frames = len(target_times)
         
-        if len(j_times) == 0:
-            continue
-            
-        if len(j_times) == 1:
-            new_pos_local[:, j_idx, :] = j_pos[0]
-            new_rot_local_euler[:, j_idx, :] = j_rot[0]
-            continue
-            
-        # Interpolate local positions
-        for i in range(3):
-            new_pos_local[:, j_idx, i] = np.interp(target_times, j_times, j_pos[:, i])
-            
-        # Interpolate rotations smoothly via radians unwrapping to prevent gimbal locks across loops
-        j_rot_rad = np.deg2rad(j_rot)
-        j_rot_rad_unwrapped = np.unwrap(j_rot_rad, axis=0)
-        j_rot_deg_unwrapped = np.rad2deg(j_rot_rad_unwrapped)
+        new_pos_local = np.zeros((num_frames, num_joints, 3))
+        new_rot_local_euler = np.zeros((num_frames, num_joints, 3))
         
-        for i in range(3):
-            new_rot_local_euler[:, j_idx, i] = np.interp(target_times, j_times, j_rot_deg_unwrapped[:, i])
+        for j_idx in range(num_joints):
+            j_times = joint_times_list[j_idx]
+            j_pos = get_joint_data(pos_local, j_idx)
+            j_rot = get_joint_data(rot_local_euler, j_idx)
             
-    mocap_data["motion"]["pos_local"] = new_pos_local
-    mocap_data["motion"]["rot_local_euler"] = new_rot_local_euler
-    mocap_data["frame_rate"] = target_fps
-    
-    if "times" in mocap_data["motion"]:
-        del mocap_data["motion"]["times"] # Clean variable map so pipelines view standardized arrays
+            if len(j_times) == 0:
+                continue
+                
+            if len(j_times) == 1:
+                new_pos_local[:, j_idx, :] = j_pos[0]
+                new_rot_local_euler[:, j_idx, :] = j_rot[0]
+                continue
+                
+            for i in range(3):
+                new_pos_local[:, j_idx, i] = np.interp(target_times, j_times, j_pos[:, i])
+                
+            j_rot_rad = np.deg2rad(j_rot)
+            j_rot_rad_unwrapped = np.unwrap(j_rot_rad, axis=0)
+            j_rot_deg_unwrapped = np.rad2deg(j_rot_rad_unwrapped)
+            
+            for i in range(3):
+                new_rot_local_euler[:, j_idx, i] = np.interp(target_times, j_times, j_rot_deg_unwrapped[:, i])
+                
+        # Create an independent data dictionary for this specific temporal segment
+        segment_data = copy.deepcopy(mocap_data)
+        segment_data["motion"]["pos_local"] = new_pos_local
+        segment_data["motion"]["rot_local_euler"] = new_rot_local_euler
+        segment_data["frame_rate"] = target_fps
         
-    return mocap_data
+        if "times" in segment_data["motion"]:
+            del segment_data["motion"]["times"]
+            
+        resampled_segments.append(segment_data)
+        
+    return resampled_segments
 
 # -------------------------------------------------------------------------------------------------
 # Load Mocap Data
@@ -205,28 +201,33 @@ mocap_tools = mocap.Mocap_Tools()
 
 all_mocap_data = []
 
-for mocap_file in mocap_files:
+for i, mocap_file in enumerate(mocap_files):
     print("process file ", mocap_file)
+    valid_time_ranges = mocap_valid_time_ranges[i]
+    
     if mocap_file.endswith(".bvh") or mocap_file.endswith(".BVH"):
         bvh_data = bvh_tools.load(os.path.join(mocap_file_path, mocap_file))
-        mocap_data = mocap_tools.bvh_to_mocap(bvh_data)
+        mocap_data_raw = mocap_tools.bvh_to_mocap(bvh_data)
         
-        # Apply the resampling conversion
-        mocap_data = resample_mocap_data(mocap_data, mocap_fps)
+        # Returns a list of segments matching the user-specified time ranges
+        segments = resample_mocap_data(mocap_data_raw, mocap_fps, valid_time_ranges)
         
-        # Afterwards, dimensions are perfectly consistent for euler conversions
-        mocap_data["motion"]["rot_local"] = mocap_tools.euler_to_quat_bvh(mocap_data["motion"]["rot_local_euler"], mocap_data["rot_sequence"])
-        
+        for segment in segments:
+            segment["motion"]["rot_local"] = mocap_tools.euler_to_quat_bvh(segment["motion"]["rot_local_euler"], segment["rot_sequence"])
+            all_mocap_data.append(segment)
+            
     elif mocap_file.endswith(".fbx") or mocap_file.endswith(".FBX"):
         fbx_data = fbx_tools.load(os.path.join(mocap_file_path, mocap_file))
-        mocap_data = mocap_tools.fbx_to_mocap(fbx_data)[0] 
+        mocap_data_raw = mocap_tools.fbx_to_mocap(fbx_data)[0] 
         
-        # Apply the resampling conversion
-        mocap_data = resample_mocap_data(mocap_data, mocap_fps)
+        # Returns a list of segments matching the user-specified time ranges
+        segments = resample_mocap_data(mocap_data_raw, mocap_fps, valid_time_ranges)
         
-        # Afterwards, dimensions are perfectly consistent for euler conversions
-        mocap_data["motion"]["rot_local"] = mocap_tools.euler_to_quat(mocap_data["motion"]["rot_local_euler"], mocap_data["rot_sequence"])
+        for segment in segments:
+            segment["motion"]["rot_local"] = mocap_tools.euler_to_quat(segment["motion"]["rot_local_euler"], segment["rot_sequence"])
+            all_mocap_data.append(segment)
 
+for mocap_data in all_mocap_data:
     mocap_data["skeleton"]["offsets"] *= mocap_pos_scale
     mocap_data["motion"]["pos_local"] *= mocap_pos_scale
 
@@ -237,8 +238,8 @@ for mocap_file in mocap_files:
         mocap_data["motion"]["pos_local"][:, 0, 2] = 0.0
 
     mocap_data["motion"]["rot_local"] = rot_np.quat_to_r6d(mocap_data["motion"]["rot_local"])
-    all_mocap_data.append(mocap_data)
 
+# Used as representative config anchor
 mocap_data = all_mocap_data[0]
 joint_count = mocap_data["motion"]["rot_local"].shape[1]
 joint_dim = 6
@@ -272,7 +273,8 @@ X = []
 y = []
 all_excerpts = []
 
-for i, mocap_data in enumerate(all_mocap_data):
+# Iterating natively over each isolated time segment extracted prior
+for mocap_data in all_mocap_data:
     pose_sequence = mocap_data["motion"]["rot_local"]
     pose_sequence = np.reshape(pose_sequence, (-1, pose_dim))
 
@@ -280,19 +282,17 @@ for i, mocap_data in enumerate(all_mocap_data):
         root_positions = mocap_data["motion"]["pos_local"][:, 0, :]
         pose_sequence = np.concatenate((root_positions, pose_sequence), axis=1)
 
-    valid_frame_ranges = mocap_valid_frame_ranges[i]
-    for valid_frame_range in valid_frame_ranges:
-        frame_range_start = valid_frame_range[0]
-        frame_range_end = valid_frame_range[1]
+    frame_range_start = 0
+    frame_range_end = pose_sequence.shape[0]
 
-        for pI in np.arange(frame_range_start, frame_range_end - seq_input_length - seq_output_length - 1, seq_offset):
-            X_sample = pose_sequence[pI:pI+seq_input_length]
-            Y_sample = pose_sequence[pI+seq_input_length:pI+seq_input_length+seq_output_length]
+    for pI in np.arange(frame_range_start, frame_range_end - seq_input_length - seq_output_length - 1, seq_offset):
+        X_sample = pose_sequence[pI:pI+seq_input_length]
+        Y_sample = pose_sequence[pI+seq_input_length:pI+seq_input_length+seq_output_length]
 
-            X.append(X_sample)
-            y.append(Y_sample)
-            all_excerpts.append(X_sample)
-            all_excerpts.append(Y_sample)
+        X.append(X_sample)
+        y.append(Y_sample)
+        all_excerpts.append(X_sample)
+        all_excerpts.append(Y_sample)
 
 X = np.array(X, dtype=np.float32)
 y = np.array(y, dtype=np.float32)
@@ -846,8 +846,9 @@ else:
     orig_sequence = orig_rot
 
 seq_index = 0
-seq_start = 1000
-seq_length = 10000
+# Defensively bound start/lengths just in case user-supplied valid time cuts sequence shorter than arbitrary 1000/10000 constants
+seq_start = min(1000, max(0, len(orig_sequence) - seq_input_length - 2)) 
+seq_length = min(10000, len(orig_sequence) - seq_start)
 
 export_sequence_anim(orig_sequence[seq_start:seq_start+seq_length], "{}orig_sequence_seq_start_{}_length_{}.gif".format(save_anims_path, seq_start, seq_length))
 export_sequence_fbx(orig_sequence[seq_start:seq_start+seq_length], "{}orig_sequence_seq_start_{}_length_{}.fbx".format(save_anims_path, seq_start, seq_length))
