@@ -1,4 +1,3 @@
-
 # -------------------------------------------------------------------------------------------------
 # Motion Continuation Model - Training Script
 # Employs a Transformer Decoder MDN Architecture
@@ -42,21 +41,11 @@ print(f"Using {device} device")
 # Mocap Settings
 # -------------------------------------------------------------------------------------------------
 
-
 mocap_file_path = "E:/Data/mocap/stocos/Solos/Canal_14-08-2023/fbx_50hz/"
 mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
 mocap_valid_frame_ranges = [ [ [ 200, 6350 ] ] ]
 mocap_pos_scale = 1.0
 mocap_fps = 50
-
-
-"""
-mocap_file_path = "C:/Users/dbisig/Projects/Premiere/Data/Mocap/Pose3D/Stocos/Solos/"
-mocap_files = ["Stocos_Mediapipe_Blumen_Baile_p.fbx"]
-mocap_valid_frame_ranges = [ [ [ 0, 4900 ] ] ]
-mocap_pos_scale = 1.0
-mocap_fps = 30
-"""
 
 mocap_loss_weights_file = None
 train_root_trajectory = False
@@ -65,7 +54,7 @@ train_root_trajectory = False
 # Save Paths Settings
 # -------------------------------------------------------------------------------------------------
 
-save_path = "results_Stocos_XSens_Embodied_Machine/"
+save_path = "results_Stocos_XSens_Embodied_Machine_v2/"
 save_weights_path = save_path + "weights/"
 save_history_path = save_path + "history/"
 save_anims_path = save_path + "anims/"
@@ -122,6 +111,91 @@ view_line_width = 1.0
 view_size = 4.0
 
 # -------------------------------------------------------------------------------------------------
+# Utility: Variable Timestamp Resampling
+# -------------------------------------------------------------------------------------------------
+
+def resample_mocap_data(mocap_data, target_fps):
+    """
+    Interpolates and resamples variable-rate keyframe data to a consistent 
+    joint array block shaped (num_frames, num_joints, 3) at target_fps.
+    """
+    times_dict = mocap_data["motion"].get("times", {})
+    joints = mocap_data["skeleton"]["joints"]
+    num_joints = len(joints)
+    
+    pos_local = mocap_data["motion"]["pos_local"]
+    rot_local_euler = mocap_data["motion"]["rot_local_euler"]
+    
+    # Resolves structure mismatch between old BVH (ndarrays) and new FBX (lists of arrays)
+    def get_joint_data(data, j_idx):
+        if isinstance(data, list):
+            return data[j_idx]
+        else:
+            return data[:, j_idx, :]
+            
+    # Calculate unified global time bounds across all present keyframes
+    min_time = float('inf')
+    max_time = float('-inf')
+    joint_times_list = []
+    
+    for j_idx, j_name in enumerate(joints):
+        if j_name in times_dict:
+            j_times = times_dict[j_name]
+        else:
+            j_frames = len(get_joint_data(pos_local, j_idx))
+            orig_fps = mocap_data.get("frame_rate", target_fps)
+            j_times = np.arange(j_frames) / orig_fps
+        
+        joint_times_list.append(j_times)
+        if len(j_times) > 0:
+            min_time = min(min_time, j_times[0])
+            max_time = max(max_time, j_times[-1])
+            
+    if min_time == float('inf'):
+        min_time, max_time = 0.0, 0.0
+        
+    # Standardize our times basis using user specified fps
+    target_times = np.arange(min_time, max_time, 1.0 / target_fps)
+    num_frames = len(target_times)
+    
+    new_pos_local = np.zeros((num_frames, num_joints, 3))
+    new_rot_local_euler = np.zeros((num_frames, num_joints, 3))
+    
+    for j_idx in range(num_joints):
+        j_times = joint_times_list[j_idx]
+        j_pos = get_joint_data(pos_local, j_idx)
+        j_rot = get_joint_data(rot_local_euler, j_idx)
+        
+        if len(j_times) == 0:
+            continue
+            
+        if len(j_times) == 1:
+            new_pos_local[:, j_idx, :] = j_pos[0]
+            new_rot_local_euler[:, j_idx, :] = j_rot[0]
+            continue
+            
+        # Interpolate local positions
+        for i in range(3):
+            new_pos_local[:, j_idx, i] = np.interp(target_times, j_times, j_pos[:, i])
+            
+        # Interpolate rotations smoothly via radians unwrapping to prevent gimbal locks across loops
+        j_rot_rad = np.deg2rad(j_rot)
+        j_rot_rad_unwrapped = np.unwrap(j_rot_rad, axis=0)
+        j_rot_deg_unwrapped = np.rad2deg(j_rot_rad_unwrapped)
+        
+        for i in range(3):
+            new_rot_local_euler[:, j_idx, i] = np.interp(target_times, j_times, j_rot_deg_unwrapped[:, i])
+            
+    mocap_data["motion"]["pos_local"] = new_pos_local
+    mocap_data["motion"]["rot_local_euler"] = new_rot_local_euler
+    mocap_data["frame_rate"] = target_fps
+    
+    if "times" in mocap_data["motion"]:
+        del mocap_data["motion"]["times"] # Clean variable map so pipelines view standardized arrays
+        
+    return mocap_data
+
+# -------------------------------------------------------------------------------------------------
 # Load Mocap Data
 # -------------------------------------------------------------------------------------------------
 
@@ -136,10 +210,21 @@ for mocap_file in mocap_files:
     if mocap_file.endswith(".bvh") or mocap_file.endswith(".BVH"):
         bvh_data = bvh_tools.load(os.path.join(mocap_file_path, mocap_file))
         mocap_data = mocap_tools.bvh_to_mocap(bvh_data)
+        
+        # Apply the resampling conversion
+        mocap_data = resample_mocap_data(mocap_data, mocap_fps)
+        
+        # Afterwards, dimensions are perfectly consistent for euler conversions
         mocap_data["motion"]["rot_local"] = mocap_tools.euler_to_quat_bvh(mocap_data["motion"]["rot_local_euler"], mocap_data["rot_sequence"])
+        
     elif mocap_file.endswith(".fbx") or mocap_file.endswith(".FBX"):
         fbx_data = fbx_tools.load(os.path.join(mocap_file_path, mocap_file))
         mocap_data = mocap_tools.fbx_to_mocap(fbx_data)[0] 
+        
+        # Apply the resampling conversion
+        mocap_data = resample_mocap_data(mocap_data, mocap_fps)
+        
+        # Afterwards, dimensions are perfectly consistent for euler conversions
         mocap_data["motion"]["rot_local"] = mocap_tools.euler_to_quat(mocap_data["motion"]["rot_local_euler"], mocap_data["rot_sequence"])
 
     mocap_data["skeleton"]["offsets"] *= mocap_pos_scale
