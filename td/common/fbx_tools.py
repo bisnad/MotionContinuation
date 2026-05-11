@@ -287,7 +287,7 @@ class FBX_Tools():
         
         fps = mocap_data[0].motion_frame_rate
         
-        if fps.is_integer() == True:
+        if float(fps).is_integer():
             fps = int(fps)
         
         fps_string = "{}".format(fps)
