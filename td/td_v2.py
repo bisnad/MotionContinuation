@@ -42,23 +42,42 @@ print(f"Using {device} device")
 # Mocap Settings
 # -------------------------------------------------------------------------------------------------
 
+"""
 mocap_file_path = "E:/Data/mocap/stocos/Solos/Canal_14-08-2023/fbx_50hz/"
 mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
 mocap_valid_time_ranges = [ [ [ 4.0, 127.0 ] ] ]  # in seconds
 mocap_pos_scale = 1.0
 mocap_fps = 50
+"""
+
+"""
+mocap_file_path = "E:/Data/mocap/stocos/Solos/Canal_14-08-2023/bvh_50hz/"
+mocap_files = ["Muriel_Embodied_Machine_variation.bvh"]
+mocap_valid_time_ranges = [ [ [ 4.0, 127.0 ] ] ]  # in seconds
+mocap_pos_scale = 1.0
+mocap_fps = 50
+"""
+
+
+mocap_file_path = "../../../Data/Mocap/Pose3D/Stocos/Solos/"
+mocap_files = ["Stocos_DoubleBind_MediaPipe.fbx"]
+mocap_valid_time_ranges = [ [ [ 1.0, 553.0 ] ] ]  # in seconds
+mocap_pos_scale = 1.0
+mocap_fps = 30
+
 
 mocap_loss_weights_file = None
-train_root_trajectory = False
+train_root_trajectory = True
 
 # -------------------------------------------------------------------------------------------------
 # Save Paths Settings
 # -------------------------------------------------------------------------------------------------
 
-save_path = "results_Stocos_XSens_Embodied_Machine/"
+save_path = "results_Stocos_DoubleBind_MediaPipe/"
 save_weights_path = save_path + "weights/"
 save_history_path = save_path + "history/"
 save_anims_path = save_path + "anims/"
+save_anim_formats = ["gif", "fbx"]
 
 os.makedirs(save_weights_path, exist_ok=True)
 os.makedirs(save_history_path, exist_ok=True)
@@ -100,7 +119,7 @@ save_history = True
 
 save_weights = True
 load_weights = False
-decoder_weights_file = "results_mdn_6d/weights/decoder_weights_epoch_200"
+decoder_weights_file = "results_Stocos_XSens_Embodied_Machine_v2_3/weights/decoder_weights_epoch_200.pt"
 
 # -------------------------------------------------------------------------------------------------
 # Render Settings
@@ -731,6 +750,45 @@ def export_sequence_anim(pose_sequence, file_name):
     skel_images = poseRenderer.create_pose_images(skel_sequence, view_min, view_max, view_ele, view_azi, view_line_width, view_size, view_size)
     skel_images[0].save(file_name, save_all=True, append_images=skel_images[1:], optimize=False, duration=33.0, loop=0)
 
+def export_sequence_bvh(pose_sequence, file_name):
+    pose_count = pose_sequence.shape[0]
+    
+    if train_root_trajectory:
+        root_trajectory = pose_sequence[:, :3]
+        rot_sequence = pose_sequence[:, 3:]
+    else:
+        root_trajectory = np.zeros((pose_count, 3), dtype=np.float32)
+        rot_sequence = pose_sequence
+
+    pred_dataset = {
+        "frame_rate": mocap_data["frame_rate"],
+        "rot_sequence": mocap_data["rot_sequence"],
+        "skeleton": mocap_data["skeleton"],
+        "motion": {}
+    }
+
+    # set joint local positions
+    # the root joint gets its local position from the trajectory, all other joints from the offsets
+    pos_local = np.repeat(np.expand_dims(pred_dataset["skeleton"]["offsets"], axis=0), pose_count, axis=0)
+    pos_local[:, 0, :] = root_trajectory
+    pred_dataset["motion"]["pos_local"] = pos_local
+
+    # Convert 6D network output to Quaternions, then to Euler Angles 
+    rot_seq_6d = np.reshape(rot_sequence, (pose_count, joint_count, 6))
+    pred_dataset["motion"]["rot_local"] = rot_np.r6d_to_quat(rot_seq_6d)
+    
+    # Use the euler conversion work-around specifically designed for BVHs in this mocap_tools version
+    pred_dataset["motion"]["rot_local_euler"] = mocap_tools.quat_to_euler_bvh(
+        pred_dataset["motion"]["rot_local"], 
+        pred_dataset["rot_sequence"]
+    )
+
+    # Use the internal mocap_to_bvh compiler
+    pred_bvh = mocap_tools.mocap_to_bvh(pred_dataset)
+    
+    # Write the BVH to disk using the standard bvh_tools script structure
+    bvh_tools.write(pred_bvh, file_name) 
+
 def export_sequence_fbx(pose_sequence, file_name):
     pose_count = pose_sequence.shape[0]
     if train_root_trajectory:
@@ -850,8 +908,12 @@ seq_index = 0
 seq_start = min(1000, max(0, len(orig_sequence) - seq_input_length - 2)) 
 seq_length = min(10000, len(orig_sequence) - seq_start)
 
-export_sequence_anim(orig_sequence[seq_start:seq_start+seq_length], "{}orig_sequence_seq_start_{}_length_{}.gif".format(save_anims_path, seq_start, seq_length))
-export_sequence_fbx(orig_sequence[seq_start:seq_start+seq_length], "{}orig_sequence_seq_start_{}_length_{}.fbx".format(save_anims_path, seq_start, seq_length))
+if "gif" in save_anim_formats:
+    export_sequence_anim(orig_sequence[seq_start:seq_start+seq_length], "{}orig_sequence_seq_start_{}_length_{}.gif".format(save_anims_path, seq_start, seq_length))
+if "fbx" in save_anim_formats:
+    export_sequence_fbx(orig_sequence[seq_start:seq_start+seq_length], "{}orig_sequence_seq_start_{}_length_{}.fbx".format(save_anims_path, seq_start, seq_length))
+if "bvh" in save_anim_formats:
+    export_sequence_bvh(orig_sequence[seq_start:seq_start+seq_length], "{}orig_sequence_seq_start_{}_length_{}.bvh".format(save_anims_path, seq_start, seq_length))
 
 num_divergent_runs = 4
 noise_scale_rot = 0.02 # Tiny perturbation for rotations (quaternions)
@@ -915,5 +977,9 @@ for run_id in range(num_divergent_runs):
     # create predicted sequence
     pred_sequence = create_pred_sequence(start_seq_6d, seq_length)
     
-    export_sequence_anim(pred_sequence, "{}pred_sequence_epoch_{}_seq_start_{}_length_{}_run_{}.gif".format(save_anims_path, epochs, seq_start, seq_length, run_id))
-    export_sequence_fbx(pred_sequence, "{}pred_sequence_epoch_{}_seq_start_{}_length_{}_run_{}.fbx".format(save_anims_path, epochs, seq_start, seq_length, run_id))
+    if "gif" in save_anim_formats:
+        export_sequence_anim(pred_sequence, "{}pred_sequence_epoch_{}_seq_start_{}_length_{}_run_{}.gif".format(save_anims_path, epochs, seq_start, seq_length, run_id))
+    if "fbx" in save_anim_formats:
+        export_sequence_fbx(pred_sequence, "{}pred_sequence_epoch_{}_seq_start_{}_length_{}_run_{}.fbx".format(save_anims_path, epochs, seq_start, seq_length, run_id))
+    if "bvh" in save_anim_formats:
+        export_sequence_bvh(pred_sequence, "{}pred_sequence_epoch_{}_seq_start_{}_length_{}_run_{}.bvh".format(save_anims_path, epochs, seq_start, seq_length, run_id))
