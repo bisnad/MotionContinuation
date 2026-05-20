@@ -28,7 +28,8 @@ class MotionControl():
         self.dispatcher = dispatcher.Dispatcher()
         
         self.dispatcher.map("/mocap/seqindex", self.setSequenceIndex)
-        self.dispatcher.map("/mocap/seqinput", self.setSequenceInput)
+        self.dispatcher.map("/mocap/frameindex", self.setFrameIndex)
+        self.dispatcher.map("/mocap/seqtime", self.setSequenceTime)
         self.dispatcher.map("/mocap/seqblend", self.setSequenceBlend)
         self.dispatcher.map("/mocap/rand", self.setRand)
         self.dispatcher.map("/mocap/setjointrot", self.setJointRotation)
@@ -63,7 +64,7 @@ class MotionControl():
         seq_index = args[0]
         self.synthesis.setOrigSeqIndex(seq_index)
         
-    def setSequenceInput(self, address, *args):
+    def setFrameIndex(self, address, *args):
         
         if len(args) == 1: # start frame index
         
@@ -78,6 +79,14 @@ class MotionControl():
             self.synthesis.setOrigSeqStartFrameIndex(seq_start_index)
             self.synthesis.setOrigSeqFrameCount(seq_frame_count)
             
+    def setSequenceTime(self, address, *args):
+
+        if len(args) == 1: # start frame time
+
+            seq_start_time = args[0]
+            seq_start_index = int(seq_start_time * self.synthesis.mocap_fps)
+            self.synthesis.setOrigSeqStartFrameIndex(seq_start_index)
+
     def setSequenceBlend(self, address, *args):
         
         blend = args[0]

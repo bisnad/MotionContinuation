@@ -166,16 +166,16 @@ class FBX_Tools():
         self.reset()
         self.mocap_data = mocap_data
         
-        # set framerate for scene
-        FBX_Tools.setFrameRate(self.scene, mocap_data)
-        
-        # set system unit for scene
-        FBX_Tools.setSystemUnit(self.scene, mocap_data)
-
-        # Prepare the FBX SDK
+        # 1. Prepare the FBX SDK FIRST
         self.sdkManager, self.scene = InitializeSdkObjects()
         self.time = FbxTime()
         
+        # 2. Then set framerate for scene
+        FBX_Tools.setFrameRate(self.scene, mocap_data)
+        
+        # 3. Then set system unit for scene
+        FBX_Tools.setSystemUnit(self.scene, mocap_data)
+
         # don't ask me why these values
         FbxAnimCurveDef.sDEFAULT_WEIGHT = 1.0
         FbxAnimCurveDef.sDEFAULT_VELOCITY = 1.0
@@ -287,7 +287,7 @@ class FBX_Tools():
         
         fps = mocap_data[0].motion_frame_rate
         
-        if fps.is_integer() == True:
+        if isinstance(fps, (int, float, np.number)):
             fps = int(fps)
         
         fps_string = "{}".format(fps)

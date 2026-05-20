@@ -19,7 +19,7 @@ config = {
     "root_pos_mean": None,
     "root_pos_std": None,
     "joint_count": 0,
-    "smooth_freq": 50,
+    "mocap_fps": 50,
     "smooth_cutoff": 0.5,
     "smooth_beta": 0.01,
     "gaussian_temp": 0.1,
@@ -91,6 +91,7 @@ class MotionSynthesis():
         self.root_pos_std = config.get("root_pos_std")
 
         self.joint_count = config.get("joint_count", 0)
+        self.mocap_fps = config.get("mocap_fps", 0)
 
         # Retrieve input sequence
         self.motion_seq = np.copy(self.orig_sequences[self.orig_seq_index][self.orig_seq_start_frame_index:self.orig_seq_start_frame_index + self.orig_seq_frame_count, ...])
@@ -114,7 +115,7 @@ class MotionSynthesis():
         self.synth_pose_lrot = None
 
         # Initialize the 1 Euro Filter
-        smooth_freq = config["smooth_freq"]
+        smooth_freq = self.mocap_fps
         smooth_cutoff = config["smooth_cutoff"]
         smooth_beta = config["smooth_beta"]
         self.one_euro_filter = OneEuroFilterTorch(freq=smooth_freq, mincutoff=smooth_cutoff, beta=smooth_beta)

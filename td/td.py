@@ -1,4 +1,3 @@
-
 # -------------------------------------------------------------------------------------------------
 # Motion Continuation Model - Training Script
 # Employs a Transformer Decoder MDN Architecture
@@ -19,6 +18,7 @@ import math
 import time
 import json
 import os
+import copy
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
 
@@ -42,33 +42,41 @@ print(f"Using {device} device")
 # Mocap Settings
 # -------------------------------------------------------------------------------------------------
 
-
+"""
 mocap_file_path = "E:/Data/mocap/stocos/Solos/Canal_14-08-2023/fbx_50hz/"
 mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
-mocap_valid_frame_ranges = [ [ [ 200, 6350 ] ] ]
+mocap_valid_time_ranges = [ [ [ 4.0, 127.0 ] ] ]  # in seconds
 mocap_pos_scale = 1.0
 mocap_fps = 50
-
+"""
 
 """
-mocap_file_path = "C:/Users/dbisig/Projects/Premiere/Data/Mocap/Pose3D/Stocos/Solos/"
-mocap_files = ["Stocos_Mediapipe_Blumen_Baile_p.fbx"]
-mocap_valid_frame_ranges = [ [ [ 0, 4900 ] ] ]
+mocap_file_path = "E:/Data/mocap/stocos/Solos/Canal_14-08-2023/bvh_50hz/"
+mocap_files = ["Muriel_Embodied_Machine_variation.bvh"]
+mocap_valid_time_ranges = [ [ [ 4.0, 127.0 ] ] ]  # in seconds
+mocap_pos_scale = 1.0
+mocap_fps = 50
+"""
+
+
+mocap_file_path = "../../../Data/Mocap/Pose3D/Stocos/Solos/"
+mocap_files = ["Stocos_DoubleBind_MediaPipe.fbx"]
+mocap_valid_time_ranges = [ [ [ 1.0, 553.0 ] ] ]  # in seconds
 mocap_pos_scale = 1.0
 mocap_fps = 30
-"""
 
 mocap_loss_weights_file = None
-train_root_trajectory = False
+train_root_trajectory = True
 
 # -------------------------------------------------------------------------------------------------
 # Save Paths Settings
 # -------------------------------------------------------------------------------------------------
 
-save_path = "results_Stocos_XSens_Embodied_Machine/"
+save_path = "results_Stocos_DoubleBind_MediaPipe/"
 save_weights_path = save_path + "weights/"
 save_history_path = save_path + "history/"
 save_anims_path = save_path + "anims/"
+save_anim_formats = ["gif", "fbx"]
 
 os.makedirs(save_weights_path, exist_ok=True)
 os.makedirs(save_history_path, exist_ok=True)
@@ -110,7 +118,7 @@ save_history = True
 
 save_weights = True
 load_weights = False
-decoder_weights_file = "results_mdn_6d/weights/decoder_weights_epoch_200"
+decoder_weights_file = "results_Stocos_XSens_Embodied_Machine_v2_3/weights/decoder_weights_epoch_200.pt"
 
 # -------------------------------------------------------------------------------------------------
 # Render Settings
@@ -122,6 +130,86 @@ view_line_width = 1.0
 view_size = 4.0
 
 # -------------------------------------------------------------------------------------------------
+# Utility: Variable Timestamp Resampling (Time-Range Filtered)
+# -------------------------------------------------------------------------------------------------
+
+def resample_mocap_data(mocap_data, target_fps, time_ranges):
+    """
+    Interpolates and resamples variable-rate keyframe data to consistent 
+    joint array blocks shaped (num_frames, num_joints, 3) at target_fps,
+    only extracting the specified continuous segments defined in time_ranges.
+    """
+    times_dict = mocap_data["motion"].get("times", {})
+    joints = mocap_data["skeleton"]["joints"]
+    num_joints = len(joints)
+    
+    pos_local = mocap_data["motion"]["pos_local"]
+    rot_local_euler = mocap_data["motion"]["rot_local_euler"]
+    
+    def get_joint_data(data, j_idx):
+        if isinstance(data, list):
+            return data[j_idx]
+        else:
+            return data[:, j_idx, :]
+            
+    # Build global original time arrays for each joint
+    joint_times_list = []
+    for j_idx, j_name in enumerate(joints):
+        if j_name in times_dict:
+            j_times = times_dict[j_name]
+        else:
+            j_frames = len(get_joint_data(pos_local, j_idx))
+            orig_fps = mocap_data.get("frame_rate", target_fps)
+            j_times = np.arange(j_frames) / orig_fps
+        joint_times_list.append(j_times)
+        
+    resampled_segments = []
+    
+    for t_range in time_ranges:
+        start_time, end_time = t_range[0], t_range[1]
+        target_times = np.arange(start_time, end_time, 1.0 / target_fps)
+        num_frames = len(target_times)
+        
+        new_pos_local = np.zeros((num_frames, num_joints, 3))
+        new_rot_local_euler = np.zeros((num_frames, num_joints, 3))
+        
+        for j_idx in range(num_joints):
+            j_times = joint_times_list[j_idx]
+            j_pos = get_joint_data(pos_local, j_idx)
+            j_rot = get_joint_data(rot_local_euler, j_idx)
+            
+            if len(j_times) == 0:
+                continue
+                
+            if len(j_times) == 1:
+                new_pos_local[:, j_idx, :] = j_pos[0]
+                new_rot_local_euler[:, j_idx, :] = j_rot[0]
+                continue
+                
+            for i in range(3):
+                new_pos_local[:, j_idx, i] = np.interp(target_times, j_times, j_pos[:, i])
+                
+            j_rot_rad = np.deg2rad(j_rot)
+            j_rot_rad_unwrapped = np.unwrap(j_rot_rad, axis=0)
+            j_rot_deg_unwrapped = np.rad2deg(j_rot_rad_unwrapped)
+            
+            for i in range(3):
+                new_rot_local_euler[:, j_idx, i] = np.interp(target_times, j_times, j_rot_deg_unwrapped[:, i])
+                
+        # Create an independent data dictionary for this specific temporal segment
+        segment_data = copy.deepcopy(mocap_data)
+        segment_data["motion"]["pos_local"] = new_pos_local
+        segment_data["motion"]["rot_local_euler"] = new_rot_local_euler
+        segment_data["frame_rate"] = target_fps
+        
+        if "times" in segment_data["motion"]:
+            del segment_data["motion"]["times"]
+            
+        resampled_segments.append(segment_data)
+        
+    return resampled_segments
+
+# -------------------------------------------------------------------------------------------------
 # Load Mocap Data
 # -------------------------------------------------------------------------------------------------
 
@@ -131,17 +219,33 @@ mocap_tools = mocap.Mocap_Tools()
 
 all_mocap_data = []
 
-for mocap_file in mocap_files:
+for i, mocap_file in enumerate(mocap_files):
     print("process file ", mocap_file)
+    valid_time_ranges = mocap_valid_time_ranges[i]
+    
     if mocap_file.endswith(".bvh") or mocap_file.endswith(".BVH"):
         bvh_data = bvh_tools.load(os.path.join(mocap_file_path, mocap_file))
-        mocap_data = mocap_tools.bvh_to_mocap(bvh_data)
-        mocap_data["motion"]["rot_local"] = mocap_tools.euler_to_quat_bvh(mocap_data["motion"]["rot_local_euler"], mocap_data["rot_sequence"])
+        mocap_data_raw = mocap_tools.bvh_to_mocap(bvh_data)
+        
+        # Returns a list of segments matching the user-specified time ranges
+        segments = resample_mocap_data(mocap_data_raw, mocap_fps, valid_time_ranges)
+        
+        for segment in segments:
+            segment["motion"]["rot_local"] = mocap_tools.euler_to_quat_bvh(segment["motion"]["rot_local_euler"], segment["rot_sequence"])
+            all_mocap_data.append(segment)
+            
     elif mocap_file.endswith(".fbx") or mocap_file.endswith(".FBX"):
         fbx_data = fbx_tools.load(os.path.join(mocap_file_path, mocap_file))
-        mocap_data = mocap_tools.fbx_to_mocap(fbx_data)[0] 
-        mocap_data["motion"]["rot_local"] = mocap_tools.euler_to_quat(mocap_data["motion"]["rot_local_euler"], mocap_data["rot_sequence"])
+        mocap_data_raw = mocap_tools.fbx_to_mocap(fbx_data)[0] 
+        
+        # Returns a list of segments matching the user-specified time ranges
+        segments = resample_mocap_data(mocap_data_raw, mocap_fps, valid_time_ranges)
+        
+        for segment in segments:
+            segment["motion"]["rot_local"] = mocap_tools.euler_to_quat(segment["motion"]["rot_local_euler"], segment["rot_sequence"])
+            all_mocap_data.append(segment)
 
+for mocap_data in all_mocap_data:
     mocap_data["skeleton"]["offsets"] *= mocap_pos_scale
     mocap_data["motion"]["pos_local"] *= mocap_pos_scale
 
@@ -152,8 +256,8 @@ for mocap_file in mocap_files:
         mocap_data["motion"]["pos_local"][:, 0, 2] = 0.0
 
     mocap_data["motion"]["rot_local"] = rot_np.quat_to_r6d(mocap_data["motion"]["rot_local"])
-    all_mocap_data.append(mocap_data)
 
+# Used as representative config anchor
 mocap_data = all_mocap_data[0]
 joint_count = mocap_data["motion"]["rot_local"].shape[1]
 joint_dim = 6
@@ -187,7 +291,8 @@ X = []
 y = []
 all_excerpts = []
 
-for i, mocap_data in enumerate(all_mocap_data):
+# Iterating natively over each isolated time segment extracted prior
+for mocap_data in all_mocap_data:
     pose_sequence = mocap_data["motion"]["rot_local"]
     pose_sequence = np.reshape(pose_sequence, (-1, pose_dim))
 
@@ -195,19 +300,17 @@ for i, mocap_data in enumerate(all_mocap_data):
         root_positions = mocap_data["motion"]["pos_local"][:, 0, :]
         pose_sequence = np.concatenate((root_positions, pose_sequence), axis=1)
 
-    valid_frame_ranges = mocap_valid_frame_ranges[i]
-    for valid_frame_range in valid_frame_ranges:
-        frame_range_start = valid_frame_range[0]
-        frame_range_end = valid_frame_range[1]
+    frame_range_start = 0
+    frame_range_end = pose_sequence.shape[0]
 
-        for pI in np.arange(frame_range_start, frame_range_end - seq_input_length - seq_output_length - 1, seq_offset):
-            X_sample = pose_sequence[pI:pI+seq_input_length]
-            Y_sample = pose_sequence[pI+seq_input_length:pI+seq_input_length+seq_output_length]
+    for pI in np.arange(frame_range_start, frame_range_end - seq_input_length - seq_output_length - 1, seq_offset):
+        X_sample = pose_sequence[pI:pI+seq_input_length]
+        Y_sample = pose_sequence[pI+seq_input_length:pI+seq_input_length+seq_output_length]
 
-            X.append(X_sample)
-            y.append(Y_sample)
-            all_excerpts.append(X_sample)
-            all_excerpts.append(Y_sample)
+        X.append(X_sample)
+        y.append(Y_sample)
+        all_excerpts.append(X_sample)
+        all_excerpts.append(Y_sample)
 
 X = np.array(X, dtype=np.float32)
 y = np.array(y, dtype=np.float32)
@@ -646,6 +749,45 @@ def export_sequence_anim(pose_sequence, file_name):
     skel_images = poseRenderer.create_pose_images(skel_sequence, view_min, view_max, view_ele, view_azi, view_line_width, view_size, view_size)
     skel_images[0].save(file_name, save_all=True, append_images=skel_images[1:], optimize=False, duration=33.0, loop=0)
 
+def export_sequence_bvh(pose_sequence, file_name):
+    pose_count = pose_sequence.shape[0]
+    
+    if train_root_trajectory:
+        root_trajectory = pose_sequence[:, :3]
+        rot_sequence = pose_sequence[:, 3:]
+    else:
+        root_trajectory = np.zeros((pose_count, 3), dtype=np.float32)
+        rot_sequence = pose_sequence
+
+    pred_dataset = {
+        "frame_rate": mocap_data["frame_rate"],
+        "rot_sequence": mocap_data["rot_sequence"],
+        "skeleton": mocap_data["skeleton"],
+        "motion": {}
+    }
+
+    # set joint local positions
+    # the root joint gets its local position from the trajectory, all other joints from the offsets
+    pos_local = np.repeat(np.expand_dims(pred_dataset["skeleton"]["offsets"], axis=0), pose_count, axis=0)
+    pos_local[:, 0, :] = root_trajectory
+    pred_dataset["motion"]["pos_local"] = pos_local
+
+    # Convert 6D network output to Quaternions, then to Euler Angles 
+    rot_seq_6d = np.reshape(rot_sequence, (pose_count, joint_count, 6))
+    pred_dataset["motion"]["rot_local"] = rot_np.r6d_to_quat(rot_seq_6d)
+    
+    # Use the euler conversion work-around specifically designed for BVHs in this mocap_tools version
+    pred_dataset["motion"]["rot_local_euler"] = mocap_tools.quat_to_euler_bvh(
+        pred_dataset["motion"]["rot_local"], 
+        pred_dataset["rot_sequence"]
+    )
+
+    # Use the internal mocap_to_bvh compiler
+    pred_bvh = mocap_tools.mocap_to_bvh(pred_dataset)
+    
+    # Write the BVH to disk using the standard bvh_tools script structure
+    bvh_tools.write(pred_bvh, file_name) 
+
 def export_sequence_fbx(pose_sequence, file_name):
     pose_count = pose_sequence.shape[0]
     if train_root_trajectory:
@@ -761,11 +903,16 @@ else:
     orig_sequence = orig_rot
 
 seq_index = 0
-seq_start = 1000
-seq_length = 10000
+# Defensively bound start/lengths just in case user-supplied valid time cuts sequence shorter than arbitrary 1000/10000 constants
+seq_start = min(1000, max(0, len(orig_sequence) - seq_input_length - 2)) 
+seq_length = min(10000, len(orig_sequence) - seq_start)
 
-export_sequence_anim(orig_sequence[seq_start:seq_start+seq_length], "{}orig_sequence_seq_start_{}_length_{}.gif".format(save_anims_path, seq_start, seq_length))
-export_sequence_fbx(orig_sequence[seq_start:seq_start+seq_length], "{}orig_sequence_seq_start_{}_length_{}.fbx".format(save_anims_path, seq_start, seq_length))
+if "gif" in save_anim_formats:
+    export_sequence_anim(orig_sequence[seq_start:seq_start+seq_length], "{}orig_sequence_seq_start_{}_length_{}.gif".format(save_anims_path, seq_start, seq_length))
+if "fbx" in save_anim_formats:
+    export_sequence_fbx(orig_sequence[seq_start:seq_start+seq_length], "{}orig_sequence_seq_start_{}_length_{}.fbx".format(save_anims_path, seq_start, seq_length))
+if "bvh" in save_anim_formats:
+    export_sequence_bvh(orig_sequence[seq_start:seq_start+seq_length], "{}orig_sequence_seq_start_{}_length_{}.bvh".format(save_anims_path, seq_start, seq_length))
 
 num_divergent_runs = 4
 noise_scale_rot = 0.02 # Tiny perturbation for rotations (quaternions)
@@ -829,5 +976,9 @@ for run_id in range(num_divergent_runs):
     # create predicted sequence
     pred_sequence = create_pred_sequence(start_seq_6d, seq_length)
     
-    export_sequence_anim(pred_sequence, "{}pred_sequence_epoch_{}_seq_start_{}_length_{}_run_{}.gif".format(save_anims_path, epochs, seq_start, seq_length, run_id))
-    export_sequence_fbx(pred_sequence, "{}pred_sequence_epoch_{}_seq_start_{}_length_{}_run_{}.fbx".format(save_anims_path, epochs, seq_start, seq_length, run_id))
+    if "gif" in save_anim_formats:
+        export_sequence_anim(pred_sequence, "{}pred_sequence_epoch_{}_seq_start_{}_length_{}_run_{}.gif".format(save_anims_path, epochs, seq_start, seq_length, run_id))
+    if "fbx" in save_anim_formats:
+        export_sequence_fbx(pred_sequence, "{}pred_sequence_epoch_{}_seq_start_{}_length_{}_run_{}.fbx".format(save_anims_path, epochs, seq_start, seq_length, run_id))
+    if "bvh" in save_anim_formats:
+        export_sequence_bvh(pred_sequence, "{}pred_sequence_epoch_{}_seq_start_{}_length_{}_run_{}.bvh".format(save_anims_path, epochs, seq_start, seq_length, run_id))

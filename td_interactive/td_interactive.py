@@ -36,11 +36,20 @@ print('Using {} device'.format(device))
 # Mocap Settings
 # -------------------------------------------------------------------------------------------------
 
-mocap_file_path = "E:/Data/mocap/stocos/Solos/Canal_14-08-2023/fbx_50hz/"
+
+mocap_file_path = "data/mocap/"
 mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
 mocap_pos_scale = 1.0
 mocap_fps = 50
+train_root_trajectory = False
+
+"""
+mocap_file_path = "../../../Data/Mocap/Pose3D/Stocos/Solos/"
+mocap_files = ["Muriel_DoubleBind_MediaPipe.fbx"]
+mocap_pos_scale = 1.0
+mocap_fps = 30
 train_root_trajectory = True
+"""
 
 # -------------------------------------------------------------------------------------------------
 # Model Settings
@@ -58,7 +67,8 @@ sequence_length = 64
 # Training Settings
 # -------------------------------------------------------------------------------------------------
 
-decoder_weights_file = "../td/results_mdn_6d_v3/weights/decoder_weights_epoch_200"
+decoder_weights_file = "data/results/weights/decoder_weights_epoch_200.pt"
+#decoder_weights_file = "../td/results_Stocos_DoubleBind_MediaPipe/weights/decoder_weights_epoch_200.pt"
 
 # -------------------------------------------------------------------------------------------------
 # Motion Synthesis Settings
@@ -172,7 +182,7 @@ synthesis_config["train_root_trajectory"] = train_root_trajectory
 synthesis_config["root_pos_mean"] = root_pos_mean if train_root_trajectory else None
 synthesis_config["root_pos_std"] = root_pos_std if train_root_trajectory else None
 synthesis_config["joint_count"] = joint_count
-synthesis_config["smooth_freq"] = mocap_fps
+synthesis_config["mocap_fps"] = mocap_fps
 synthesis_config["smooth_cutoff"] = motion_smooth_cutoff
 synthesis_config["smooth_beta"] = motion_smooth_beta
 synthesis_config["gaussian_temp"] = gaussian_temp
@@ -197,6 +207,8 @@ from PyQt5 import QtWidgets
 motion_gui.config["synthesis"] = synthesis
 motion_gui.config["sender"] = osc_sender
 motion_gui.config["update_interval"] = 1.0 / mocap_fps
+motion_gui.config["osc_ip"] = osc_send_ip
+motion_gui.config["osc_port"] = osc_send_port
 
 app = QtWidgets.QApplication(sys.argv)
 gui = motion_gui.MotionGui(motion_gui.config)

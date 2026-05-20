@@ -5,12 +5,14 @@
 			"1" : 			{
 				"id" : 1,
 				"data" : 				{
-					"input_sequence_start" : [ 64 ],
-					"input_sequence_start[3]" : [ 0 ],
+					"gaussiantemp_max" : [ 2.0 ],
+					"gaussiantemp_min" : [ 0.0 ],
+					"gaussiantemp_value" : [ 0.05 ],
 					"joint_index" : [ 1 ],
 					"joint_index[1]" : [ 3 ],
-					"occlusionResol" : [ 0.5 ],
-					"occlusionResol[1]" : [ 1.0 ],
+					"pitmp_max" : [ 2.5 ],
+					"pitmp_min" : [ 0.1 ],
+					"pitmp_value" : [ 0.583333333333333 ],
 					"rot_repeat" : [ 0 ],
 					"rot_repeat[6]" : [ 0 ],
 					"rotaxis_x" : [ 1.0 ],
@@ -19,17 +21,15 @@
 					"rotaxis_y[1]" : [ 1.0 ],
 					"rotaxis_z" : [ 0.0 ],
 					"rotaxis_z[1]" : [ 0.0 ],
-					"smoothCutOff" : [ 4.612903225806452 ],
 					"smoothBeta" : [ 0.01 ],
-					"pitmp_value" : [ 0.583333333333333 ],
-					"pitmp_min" : [ 0.1 ],
-					"pitmp_max" : [ 2.5 ],
-					"gaussiantemp_value" : [ 0.05 ],
-					"gaussiantemp_min" : [ 0.0 ],
-					"gaussiantemp_max" : [ 2.0 ],
-					"topp_value" : [ 0.888888888888889 ],
+					"smoothCutOff" : [ 4.612903225806452 ],
+					"topp_max" : [ 0.95 ],
 					"topp_min" : [ 0.5 ],
-					"topp_max" : [ 0.95 ]
+					"topp_value" : [ 0.888888888888889 ],
+					"input_sequence_index]" : [ 0 ],
+					"input_sequence_start_time" : [ 0.0 ],
+					"joint_angle" : [ 0.831109677419355 ],
+					"joint_angle[1]" : [ 1.571 ]
 				}
 
 			}
@@ -37,12 +37,14 @@
 			"2" : 			{
 				"id" : 2,
 				"data" : 				{
-					"input_sequence_start" : [ 6312 ],
-					"input_sequence_start[3]" : [  ],
+					"gaussiantemp_max" : [  ],
+					"gaussiantemp_min" : [  ],
+					"gaussiantemp_value" : [  ],
 					"joint_index" : [ 1 ],
 					"joint_index[1]" : [  ],
-					"occlusionResol" : [ 0.71032205008489 ],
-					"occlusionResol[1]" : [  ],
+					"pitmp_max" : [  ],
+					"pitmp_min" : [  ],
+					"pitmp_value" : [  ],
 					"rot_repeat" : [ 1 ],
 					"rot_repeat[6]" : [  ],
 					"rotaxis_x" : [ 0.0 ],
@@ -51,17 +53,15 @@
 					"rotaxis_y[1]" : [  ],
 					"rotaxis_z" : [ 0.0 ],
 					"rotaxis_z[1]" : [  ],
-					"smoothCutOff" : [  ],
 					"smoothBeta" : [  ],
-					"pitmp_value" : [  ],
-					"pitmp_min" : [  ],
-					"pitmp_max" : [  ],
-					"gaussiantemp_value" : [  ],
-					"gaussiantemp_min" : [  ],
-					"gaussiantemp_max" : [  ],
-					"topp_value" : [  ],
+					"smoothCutOff" : [  ],
+					"topp_max" : [  ],
 					"topp_min" : [  ],
-					"topp_max" : [  ]
+					"topp_value" : [  ],
+					"input_sequence_index]" : [  ],
+					"input_sequence_start_time" : [  ],
+					"joint_angle" : [  ],
+					"joint_angle[1]" : [  ]
 				}
 
 			}
@@ -69,12 +69,14 @@
 			"3" : 			{
 				"id" : 3,
 				"data" : 				{
-					"input_sequence_start" : [ 6312 ],
-					"input_sequence_start[3]" : [  ],
+					"gaussiantemp_max" : [  ],
+					"gaussiantemp_min" : [  ],
+					"gaussiantemp_value" : [  ],
 					"joint_index" : [ 1 ],
 					"joint_index[1]" : [  ],
-					"occlusionResol" : [ 0.0 ],
-					"occlusionResol[1]" : [  ],
+					"pitmp_max" : [  ],
+					"pitmp_min" : [  ],
+					"pitmp_value" : [  ],
 					"rot_repeat" : [ 1 ],
 					"rot_repeat[6]" : [  ],
 					"rotaxis_x" : [ 1.0 ],
@@ -83,17 +85,15 @@
 					"rotaxis_y[1]" : [  ],
 					"rotaxis_z" : [ 0.0 ],
 					"rotaxis_z[1]" : [  ],
-					"smoothCutOff" : [  ],
 					"smoothBeta" : [  ],
-					"pitmp_value" : [  ],
-					"pitmp_min" : [  ],
-					"pitmp_max" : [  ],
-					"gaussiantemp_value" : [  ],
-					"gaussiantemp_min" : [  ],
-					"gaussiantemp_max" : [  ],
-					"topp_value" : [  ],
+					"smoothCutOff" : [  ],
+					"topp_max" : [  ],
 					"topp_min" : [  ],
-					"topp_max" : [  ]
+					"topp_value" : [  ],
+					"input_sequence_index]" : [  ],
+					"input_sequence_start_time" : [  ],
+					"joint_angle" : [  ],
+					"joint_angle[1]" : [  ]
 				}
 
 			}
@@ -101,12 +101,14 @@
 			"1000" : 			{
 				"id" : 1000,
 				"data" : 				{
-					"input_sequence_start" : [ 6312 ],
-					"input_sequence_start[3]" : [  ],
+					"gaussiantemp_max" : [  ],
+					"gaussiantemp_min" : [  ],
+					"gaussiantemp_value" : [  ],
 					"joint_index" : [ 1 ],
 					"joint_index[1]" : [  ],
-					"occlusionResol" : [ 0.71032205008489 ],
-					"occlusionResol[1]" : [  ],
+					"pitmp_max" : [  ],
+					"pitmp_min" : [  ],
+					"pitmp_value" : [  ],
 					"rot_repeat" : [ 1 ],
 					"rot_repeat[6]" : [  ],
 					"rotaxis_x" : [ 0.0 ],
@@ -115,17 +117,15 @@
 					"rotaxis_y[1]" : [  ],
 					"rotaxis_z" : [ 0.0 ],
 					"rotaxis_z[1]" : [  ],
-					"smoothCutOff" : [  ],
 					"smoothBeta" : [  ],
-					"pitmp_value" : [  ],
-					"pitmp_min" : [  ],
-					"pitmp_max" : [  ],
-					"gaussiantemp_value" : [  ],
-					"gaussiantemp_min" : [  ],
-					"gaussiantemp_max" : [  ],
-					"topp_value" : [  ],
+					"smoothCutOff" : [  ],
+					"topp_max" : [  ],
 					"topp_min" : [  ],
-					"topp_max" : [  ]
+					"topp_value" : [  ],
+					"input_sequence_index]" : [  ],
+					"input_sequence_start_time" : [  ],
+					"joint_angle" : [  ],
+					"joint_angle[1]" : [  ]
 				}
 
 			}
