@@ -737,6 +737,7 @@ for run_id in range(num_divergent_runs):
     print(f"Generating divergent run {run_id+1}/{num_divergent_runs}...")
     
     # create predicted sequence
+    rng = np.random.default_rng()
     target_location_mins = np.array([-100.0, 50.0, -100.0], dtype=float)
     target_location_maxs = np.array([100.0, 150.0, 100.0], dtype=float)
     target_location_means = (target_location_mins + target_location_maxs) / 2.0
