@@ -14,7 +14,7 @@ import time
 import json
 import os
 import copy
-import matplotlib.subplots as plt
+import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
 
 from common import utils
