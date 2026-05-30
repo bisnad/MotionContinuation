@@ -42,13 +42,12 @@ print(f"Using {device} device")
 # Mocap Settings
 # -------------------------------------------------------------------------------------------------
 
-"""
 mocap_file_path = "E:/Data/mocap/stocos/Solos/Canal_14-08-2023/fbx_50hz/"
 mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
 mocap_valid_time_ranges = [ [ [ 4.0, 127.0 ] ] ]  # in seconds
 mocap_pos_scale = 1.0
 mocap_fps = 50
-"""
+
 
 """
 mocap_file_path = "E:/Data/mocap/stocos/Solos/Canal_14-08-2023/bvh_50hz/"
@@ -58,12 +57,13 @@ mocap_pos_scale = 1.0
 mocap_fps = 50
 """
 
-
+"""
 mocap_file_path = "../../../Data/Mocap/Pose3D/Stocos/Solos/"
 mocap_files = ["Stocos_DoubleBind_MediaPipe.fbx"]
 mocap_valid_time_ranges = [ [ [ 1.0, 553.0 ] ] ]  # in seconds
 mocap_pos_scale = 1.0
 mocap_fps = 30
+"""
 
 mocap_loss_weights_file = None
 train_root_trajectory = True
@@ -72,7 +72,7 @@ train_root_trajectory = True
 # Save Paths Settings
 # -------------------------------------------------------------------------------------------------
 
-save_path = "results_Stocos_DoubleBind_MediaPipe/"
+save_path = "results_test/"
 save_weights_path = save_path + "weights/"
 save_history_path = save_path + "history/"
 save_anims_path = save_path + "anims/"
