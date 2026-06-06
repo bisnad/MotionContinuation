@@ -1,6 +1,6 @@
 # -------------------------------------------------------------------------------------------------
-# Motion Continuation Model - Training Script (Autonomous / Interactive Target Mode)
-# Employs a Transformer Decoder MDN Architecture
+# same as td_target_pos_conditioning.py but:
+# with foot sliding penality added
 # -------------------------------------------------------------------------------------------------
 
 import torch
@@ -40,9 +40,12 @@ mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
 mocap_valid_time_ranges = [ [ [ 4.0, 127.0 ] ] ]  # in seconds
 mocap_pos_scale = 1.0
 mocap_fps = 50
+mocap_foot_joint_indices = [4, 8]
 
 mocap_loss_weights_file = None
 train_root_trajectory = True
+
+# 4 & 8
 
 # -------------------------------------------------------------------------------------------------
 # Save Paths Settings
@@ -85,6 +88,8 @@ pos_loss_scale = 0.1
 rot_loss_scale = 1.0
 traj_loss_scale = 0.1
 nll_loss_scale = 1.0
+foot_sliding_loss_scale = 1.0
+contact_height_threshold = 0.05
 teacher_forcing_prob = 0.5
 model_save_interval = 50
 
@@ -333,6 +338,41 @@ def rot_loss(y, yhat):
     trace = torch.diagonal(torch.matmul(y_mat.transpose(-1, -2), yhat_mat), dim1=-2, dim2=-1).sum(-1)
     return torch.mean(torch.acos(torch.clamp((trace - 1) / 2, -0.9999, 0.9999)) * joint_loss_weights_t)
 
+def foot_sliding_loss(yhat):
+    """
+    Penalizes the velocity of foot joints when they are close to the ground (height < threshold).
+    yhat: The predicted poses sequence (batch, seq_len, pose_dim).
+    """
+    if train_root_trajectory:
+        yhat_root_traj = (yhat[:, :, :3] * root_pos_std_tensor) + root_pos_mean_tensor
+        yhat_rot_6d = yhat[:, :, 3:].reshape(yhat.shape[0], yhat.shape[1], joint_count, 6)
+    else:
+        yhat_root_traj = torch.zeros((yhat.shape[0], yhat.shape[1], 3)).to(device)
+        yhat_rot_6d = yhat.reshape(yhat.shape[0], yhat.shape[1], joint_count, 6)
+
+    # Compute global positions of all joints across the sequence
+    yhat_pos = forward_kinematics(rot_to.r6d_to_mat(yhat_rot_6d), yhat_root_traj)
+    
+    # Extract foot positions (batch, seq_len, num_feet, 3)
+    foot_positions = yhat_pos[:, :, mocap_foot_joint_indices, :]
+    
+    # Calculate foot velocity between consecutive frames (batch, seq_len-1, num_feet, 3)
+    foot_velocities = foot_positions[:, 1:, :, :] - foot_positions[:, :-1, :, :]
+    
+    # Calculate foot height (assuming Y is the up axis at index 1. If Z is up, use index 2)
+    # We take the height of the current frame for contact checking
+    foot_heights = foot_positions[:, :-1, :, 1] 
+    
+    # Soft contact mask: 1.0 when on ground, approaches 0.0 as height increases
+    # We use ReLU to ensure negative heights (if they penetrate ground) are heavily penalized
+    contact_weights = torch.clamp(1.0 - (foot_heights / contact_height_threshold), min=0.0, max=1.0)
+    
+    # Penalize the squared magnitude of velocity weighted by the contact mask
+    velocity_sq = torch.sum(foot_velocities ** 2, dim=-1)  # (batch, seq_len-1, num_feet)
+    sliding_penalty = torch.mean(velocity_sq * contact_weights)
+    
+    return sliding_penalty
+
 def mdn_nll_loss(log_pi, mu, sigma, target):
     target = target.unsqueeze(2)
     var = sigma ** 2
@@ -376,11 +416,17 @@ def loss(log_pi, mu, sigma, target_poses_cond):
     _nll_loss = mdn_nll_loss(log_pi, mu, sigma, target_poses_cond)
     pred_poses_cond = sample_mdn(log_pi, mu, sigma, pi_temperature=pi_temperature)
 
-    target_poses, pred_poses = target_poses_cond[:, :, :input_dim], pred_poses_cond[:, :, :input_dim]
+    target_poses = target_poses_cond[:, :, :input_dim]
+    pred_poses = pred_poses_cond[:, :, :input_dim]
+    
     _pos_loss = pos_loss(target_poses, pred_poses)
     _rot_loss = rot_loss(target_poses, pred_poses)
+    
+    # Compute the foot sliding penalty
+    _sliding_loss = foot_sliding_loss(pred_poses)
 
     _total_loss = (_nll_loss * nll_loss_scale) + (_pos_loss * pos_loss_scale) + (_rot_loss * rot_loss_scale)
+    _total_loss += (_sliding_loss * foot_sliding_loss_scale) # Apply sliding penalty
 
     if train_root_trajectory:
         _total_loss += (torch.mean((target_poses[:, :, :3] - pred_poses[:, :, :3]) ** 2) * traj_loss_scale)
@@ -388,7 +434,7 @@ def loss(log_pi, mu, sigma, target_poses_cond):
     # Penalize predicted target error
     _total_loss += (torch.mean((target_poses_cond[:, :, input_dim:] - pred_poses_cond[:, :, input_dim:]) ** 2) * traj_loss_scale)
 
-    return _total_loss, _nll_loss, _pos_loss, _rot_loss
+    return _total_loss, _nll_loss, _pos_loss, _rot_loss, _sliding_loss
 
 def train_step(pose_sequences, target_poses, teacher_forcing):
     decoder.train()
@@ -432,9 +478,9 @@ def train_step(pose_sequences, target_poses, teacher_forcing):
         _sigma_for_loss = torch.cat(_sigma_list, dim=1)
         _target_poses_for_loss = target_poses_cond
 
-    _loss, _nll_loss, _pos_loss, _rot_loss = loss(_log_pi_for_loss, _mu_for_loss, _sigma_for_loss, _target_poses_for_loss) 
+    _loss, _nll_loss, _pos_loss, _rot_loss, _sliding_loss = loss(_log_pi_for_loss, _mu_for_loss, _sigma_for_loss, _target_poses_for_loss) 
     optimizer.zero_grad(); _loss.backward(); optimizer.step()
-    return _loss, _nll_loss, _pos_loss, _rot_loss
+    return _loss, _nll_loss, _pos_loss, _rot_loss, _sliding_loss
 
 @torch.no_grad()
 def test_step(pose_sequences, target_poses, teacher_forcing):
@@ -471,22 +517,24 @@ def test_step(pose_sequences, target_poses, teacher_forcing):
         _mu_for_loss = torch.cat(_mu_list, dim=1)
         _sigma_for_loss = torch.cat(_sigma_list, dim=1)
         _target_poses_for_loss = target_poses_cond
+        
+    _loss, _nll_loss, _pos_loss, _rot_loss, _sliding_loss = loss(_log_pi_for_loss, _mu_for_loss, _sigma_for_loss, _target_poses_for_loss) 
 
-    return loss(_log_pi_for_loss, _mu_for_loss, _sigma_for_loss, _target_poses_for_loss) 
+    return _loss, _nll_loss, _pos_loss, _rot_loss, _sliding_loss
 
 def train(train_dataloader, test_dataloader, epochs):
-    loss_history = {"train": [], "test": [], "nll": [], "pos": [], "rot": []}
+    loss_history = {"train": [], "test": [], "nll": [], "pos": [], "rot": [], "slide": []}
     for epoch in range(epochs):
         start = time.time()
-        t_loss, n_loss, p_loss, r_loss = [], [], [], []
+        t_loss, n_loss, p_loss, r_loss, s_loss = [], [], [], [], []
 
         for train_batch in train_dataloader:
-            _loss, _nll_loss, _pos_loss, _rot_loss = train_step(train_batch[0].to(device), train_batch[1].to(device), np.random.uniform() < teacher_forcing_prob)
-            t_loss.append(_loss.item()); n_loss.append(_nll_loss.item()); p_loss.append(_pos_loss.item()); r_loss.append(_rot_loss.item())
+            _loss, _nll_loss, _pos_loss, _rot_loss, _sliding_loss = train_step(train_batch[0].to(device), train_batch[1].to(device), np.random.uniform() < teacher_forcing_prob)
+            t_loss.append(_loss.item()); n_loss.append(_nll_loss.item()); p_loss.append(_pos_loss.item()); r_loss.append(_rot_loss.item()); s_loss.append(_sliding_loss.item())
 
         te_loss = []
         for test_batch in test_dataloader:
-            _loss, _, _, _ = test_step(test_batch[0].to(device), test_batch[1].to(device), np.random.uniform() < teacher_forcing_prob)
+            _loss, _, _, _, _ = test_step(test_batch[0].to(device), test_batch[1].to(device), np.random.uniform() < teacher_forcing_prob)
             te_loss.append(_loss.item())
 
         if epoch % model_save_interval == 0 and save_weights:
@@ -497,9 +545,10 @@ def train(train_dataloader, test_dataloader, epochs):
         loss_history["nll"].append(np.mean(n_loss))
         loss_history["pos"].append(np.mean(p_loss))
         loss_history["rot"].append(np.mean(r_loss))
+        loss_history["slide"].append(np.mean(s_loss))
         scheduler.step()
 
-        print(f"epoch {epoch + 1} : train: {np.mean(t_loss):01.4f} test: {np.mean(te_loss):01.4f} nll {np.mean(n_loss):01.4f} pos {np.mean(p_loss):01.4f} rot {np.mean(r_loss):01.4f} time {time.time()-start:01.2f}")
+        print(f"epoch {epoch + 1} : train: {np.mean(t_loss):01.4f} ... slide {np.mean(s_loss):01.4f} time {time.time()-start:01.2f}")
 
     return loss_history
 

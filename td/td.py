@@ -42,12 +42,60 @@ print(f"Using {device} device")
 # Mocap Settings
 # -------------------------------------------------------------------------------------------------
 
+"""
+mocap_file_path = "E:/Data/mocap/stocos/Solos/MovementQualities/fbx_50hz/"
+mocap_files = ["staccato_fullbody_take1.fbx"]
+mocap_valid_time_ranges = [ [ [ 8.8, 131.0 ] ] ]  # in seconds
+mocap_pos_scale = 1.0
+mocap_fps = 50
+mocap_loss_weights_file = "data/configs/qualisys_with_hands_joint_loss_weights.json"
+"""
+
+mocap_file_path = "E:/Data/mocap/stocos/Solos/MovementQualities/fbx_50hz/"
+mocap_files = ["staccato_fullbody_take1.fbx",
+                "staccato_fullbody_take2.fbx",
+                "staccato_fullbody_take3.fbx",
+                "staccato_fullbody_take4.fbx"]
+mocap_valid_time_ranges = [ [ [ 8.8, 131.0 ] ],
+                            [ [ 10.6, 130.4 ] ],
+                            [ [ 13.9, 127.9 ] ],
+                            [ [ 12.6, 88.5 ] ] ]  # in seconds
+mocap_pos_scale = 1.0
+mocap_fps = 50
+mocap_loss_weights_file = "data/configs/qualisys_with_hands_joint_loss_weights.json"
+
+"""
+mocap_file_path = "E:/Data/mocap/stocos/Solos/MovementQualities/fbx_50hz/"
+mocap_files = ["staccato_fullbody_take1.fbx",
+                "staccato_fullbody_take2.fbx",
+                "staccato_fullbody_take3.fbx",
+                "staccato_fullbody_take4.fbx",
+                "staccato_leftarm_take1.fbx",
+                "staccato_leftleg_take1.fbx",
+                "staccato_rightarm_take1.fbx",
+                "staccato_rightleg_take1.fbx",
+                "staccato_torso_take1.fbx"]
+mocap_valid_time_ranges = [ [ [ 8.8, 131.0 ] ],
+                            [ [ 10.6, 130.4 ] ],
+                            [ [ 13.9, 127.9 ] ],
+                            [ [ 12.6, 88.5 ] ],
+                            [ [ 21.6, 82.4 ] ],
+                            [ [ 6.1, 67.5 ] ],
+                            [ [ 7.6, 70.1 ] ],
+                            [ [ 11.3, 74.3 ] ],
+                            [ [ 5.3, 64.8 ] ] ]  # in seconds
+mocap_pos_scale = 1.0
+mocap_fps = 50
+mocap_loss_weights_file = "data/configs/qualisys_with_hands_joint_loss_weights.json"
+"""
+
+"""
 mocap_file_path = "E:/Data/mocap/stocos/Solos/Canal_14-08-2023/fbx_50hz/"
 mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
 mocap_valid_time_ranges = [ [ [ 4.0, 127.0 ] ] ]  # in seconds
 mocap_pos_scale = 1.0
 mocap_fps = 50
-
+"""
 
 """
 mocap_file_path = "E:/Data/mocap/stocos/Solos/Canal_14-08-2023/bvh_50hz/"
@@ -65,14 +113,14 @@ mocap_pos_scale = 1.0
 mocap_fps = 30
 """
 
-mocap_loss_weights_file = None
-train_root_trajectory = True
+#mocap_loss_weights_file = None
+train_root_trajectory = False
 
 # -------------------------------------------------------------------------------------------------
 # Save Paths Settings
 # -------------------------------------------------------------------------------------------------
 
-save_path = "results_test/"
+save_path = "results_test_v5/"
 save_weights_path = save_path + "weights/"
 save_history_path = save_path + "history/"
 save_anims_path = save_path + "anims/"
@@ -86,7 +134,7 @@ os.makedirs(save_anims_path, exist_ok=True)
 # Model Settings
 # -------------------------------------------------------------------------------------------------
 
-mdn_num_mixtures = 20
+mdn_num_mixtures = 4
 decoder_layer_count = 6 
 decoder_head_count = 8
 decoder_embed_dim = 512 
@@ -97,20 +145,20 @@ decoder_dropout = 0.1
 # Training Settings
 # -------------------------------------------------------------------------------------------------
 
-batch_size = 32
+batch_size = 64
 test_percentage = 0.1
 
 seq_input_length = 64
-seq_output_length = 2
-seq_offset = 4
+seq_output_length = 4 # 10
+seq_offset = 1
 
-pi_temperature=2.0
+pi_temperature=1.0
 learning_rate = 1e-4
-pos_loss_scale = 0.1
+pos_loss_scale = 1.0
 rot_loss_scale = 1.0
 traj_loss_scale = 0.1
 nll_loss_scale = 1.0
-teacher_forcing_prob = 0.5
+teacher_forcing_prob = 0.5 # 0.0
 model_save_interval = 50
 
 epochs = 200
@@ -420,6 +468,13 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.336
 
 joint_loss_weights_t = torch.tensor(joint_loss_weights, dtype=torch.float32).reshape(1, 1, -1).to(device)
 
+mdn_loss_weights = []
+if train_root_trajectory:
+    mdn_loss_weights.extend([1.0, 1.0, 1.0]) # Root trajectory weights (unscaled)
+for w in joint_loss_weights:
+    mdn_loss_weights.extend([w] * 6)         # 6D rotation weights per joint
+mdn_loss_weights_t = torch.tensor(mdn_loss_weights, dtype=torch.float32).view(1, 1, 1, -1).to(device)
+
 def forward_kinematics(rotation_matrices, root_positions):
     t_offsets = torch.tensor(offsets).to(device)
     expanded_offsets = t_offsets.expand(rotation_matrices.shape[0], rotation_matrices.shape[1], offsets.shape[0], offsets.shape[1]).unsqueeze(-1)
@@ -480,8 +535,17 @@ def rot_loss(y, yhat):
 def mdn_nll_loss(log_pi, mu, sigma, target):
     target = target.unsqueeze(2)
     var = sigma ** 2
+    
+    # Calculate log likelihood for each dimension
     log_normal = -0.5 * math.log(2 * math.pi) - torch.log(sigma) - 0.5 * ((target - mu) ** 2 / var)
+    
+    # --- NEW CODE: Apply the joint weights to scale the log likelihoods ---
+    log_normal = log_normal * mdn_loss_weights_t
+    
+    # Sum over the features (input_dim)
     log_normal = torch.sum(log_normal, dim=-1) 
+    
+    # Combine with mixture weights
     log_mix = log_pi + log_normal 
     return -torch.logsumexp(log_mix, dim=-1).mean()
 
@@ -551,14 +615,25 @@ def train_step(pose_sequences, target_poses, teacher_forcing):
     output_poses_length = target_poses.shape[1]
 
     if teacher_forcing:
+        # We want to use the full pose_sequences as the prompt, 
+        # and all target poses EXCEPT the last one as the ongoing inputs
         _target_inputs = target_poses[:, :-1, :]
+        
+        # The input to the transformer is the prompt + shifted targets
         _full_input = torch.cat((pose_sequences, _target_inputs), dim=1)
 
+        # Forward pass with causal masking (so step t only sees up to step t)
         log_pi, mu, sigma = decoder(_full_input, return_sequence=True)
 
+        # We evaluate the loss only on the outputs corresponding to the target sequence.
+        # Because we gave it `output_poses_length` tokens (last token of pose_sequences + target_poses[:-1]), 
+        # it predicts exactly `output_poses_length` targets.
         _log_pi_for_loss = log_pi[:, -output_poses_length:, :]
         _mu_for_loss = mu[:, -output_poses_length:, :, :]
         _sigma_for_loss = sigma[:, -output_poses_length:, :, :]
+        
+        # The targets remain the same. The output of the model at the end of `pose_sequences`
+        # is trained to predict `target_poses[:, 0, :]`, and so on.
         _target_poses_for_loss = target_poses
     else:
         _input_poses = pose_sequences 
@@ -905,7 +980,7 @@ else:
 seq_index = 0
 # Defensively bound start/lengths just in case user-supplied valid time cuts sequence shorter than arbitrary 1000/10000 constants
 seq_start = min(1000, max(0, len(orig_sequence) - seq_input_length - 2)) 
-seq_length = min(10000, len(orig_sequence) - seq_start)
+seq_length = min(1000, len(orig_sequence) - seq_start)
 
 if "gif" in save_anim_formats:
     export_sequence_anim(orig_sequence[seq_start:seq_start+seq_length], "{}orig_sequence_seq_start_{}_length_{}.gif".format(save_anims_path, seq_start, seq_length))

@@ -36,12 +36,13 @@ print('Using {} device'.format(device))
 # Mocap Settings
 # -------------------------------------------------------------------------------------------------
 
-
+"""
 mocap_file_path = "data/mocap/"
 mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
 mocap_pos_scale = 1.0
 mocap_fps = 50
 train_root_trajectory = False
+"""
 
 """
 mocap_file_path = "../../../Data/Mocap/Pose3D/Stocos/Solos/"
@@ -51,11 +52,52 @@ mocap_fps = 30
 train_root_trajectory = True
 """
 
+"""
+# Fluidity
+mocap_file_path = "E:/Data/mocap/stocos/Solos/MovementQualities/fbx_50hz/"
+mocap_files = ["fluidity_fullbody_take1.fbx" ]
+mocap_pos_scale = 1.0
+mocap_fps = 50
+mocap_loss_weights_file = "data/configs/qualisys_with_hands_joint_loss_weights.json"
+train_root_trajectory = False
+"""
+
+
+# Staccato
+mocap_file_path = "../../../Data/Mocap/Qualisys/Stocos/Solos/fbx_50hz/"
+mocap_files = ["staccato_fullbody_take1.fbx",
+                "staccato_fullbody_take2.fbx",
+                "staccato_fullbody_take3.fbx",
+                "staccato_fullbody_take4.fbx"]
+mocap_pos_scale = 1.0
+mocap_fps = 50
+train_root_trajectory = False
+
+
+"""
+# Thrusting
+mocap_file_path = "E:/Data/mocap/stocos/Solos/MovementQualities/fbx_50hz/"
+mocap_files = ["thrusting_fullbody_take1.fbx" ]
+mocap_pos_scale = 1.0
+mocap_fps = 50
+train_root_trajectory = False
+"""
+
+"""
+# Levitation
+mocap_file_path = "E:/Data/mocap/stocos/Solos/MovementQualities/fbx_50hz/"
+mocap_files = ["levitation_fullbody_take1.fbx",
+                "levitation_fullbody_take2.fbx" ]
+mocap_pos_scale = 1.0
+mocap_fps = 50
+train_root_trajectory = False
+"""
+
 # -------------------------------------------------------------------------------------------------
 # Model Settings
 # -------------------------------------------------------------------------------------------------
 
-mdn_num_mixtures = 20
+mdn_num_mixtures = 4
 decoder_layer_count = 6
 decoder_head_count = 8
 decoder_embed_dim = 512
@@ -67,18 +109,21 @@ sequence_length = 64
 # Training Settings
 # -------------------------------------------------------------------------------------------------
 
-decoder_weights_file = "data/results/weights/decoder_weights_epoch_200.pt"
-#decoder_weights_file = "../td/results_Stocos_DoubleBind_MediaPipe/weights/decoder_weights_epoch_200.pt"
+#decoder_weights_file = "data/results/weights/decoder_weights_epoch_200.pt"
+decoder_weights_file = "../td/results_Stocos_Qualisys_Staccato_Fullbody_v2/weights/decoder_weights_epoch_200.pt"
+#decoder_weights_file = "../td/results_Stocos_Qualisys_Fluidity_Fullbody/weights/decoder_weights_epoch_200.pt"
+#decoder_weights_file = "../td/results_Stocos_Qualisys_Thrusting_Fullbody/weights/decoder_weights_epoch_200.pt"
+#decoder_weights_file = "../td/results_Stocos_Qualisys_Levitation_Fullbody_v2/weights/decoder_weights_epoch_200.pt"
 
 # -------------------------------------------------------------------------------------------------
 # Motion Synthesis Settings
 # -------------------------------------------------------------------------------------------------
 
-gaussian_temp = 0.1
-pi_temperature = 2.0
+gaussian_temp = 0.2
+pi_temperature = 1.5
 top_p = 0.9
-motion_smooth_cutoff = 6.0
-motion_smooth_beta = 0.01
+motion_smooth_cutoff = 5.0 # 6.0
+motion_smooth_beta = 0.01 # 0.01
 
 # -------------------------------------------------------------------------------------------------
 # OSC Settings
