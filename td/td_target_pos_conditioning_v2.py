@@ -41,6 +41,7 @@ mocap_valid_time_ranges = [ [ [ 4.0, 127.0 ] ] ]  # in seconds
 mocap_pos_scale = 1.0
 mocap_fps = 50
 mocap_foot_joint_indices = [4, 8]
+mocap_up_coord_index = 1 # 1
 
 mocap_loss_weights_file = None
 train_root_trajectory = True
@@ -50,7 +51,7 @@ train_root_trajectory = True
 # -------------------------------------------------------------------------------------------------
 # Save Paths Settings
 # -------------------------------------------------------------------------------------------------
-save_path = "results_Stocos_EmbodiedMachine_TPConditioned/"
+save_path = "results_Stocos_EmbodiedMachine_TPConditioned_FootSlide_v3/"
 save_weights_path = save_path + "weights/"
 save_history_path = save_path + "history/"
 save_anims_path = save_path + "anims/"
@@ -88,15 +89,15 @@ pos_loss_scale = 0.1
 rot_loss_scale = 1.0
 traj_loss_scale = 0.1
 nll_loss_scale = 1.0
-foot_sliding_loss_scale = 1.0
-contact_height_threshold = 0.05
+foot_sliding_loss_scale = 0.1
+contact_height_threshold = 3.0
 teacher_forcing_prob = 0.5
 model_save_interval = 50
 
 epochs = 200
-save_history = False
-save_weights = False
-load_weights = True
+save_history = True
+save_weights = True
+load_weights = False
 decoder_weights_file = "results_Stocos_EmbodiedMachine_TPConditioned/weights/decoder_weights_epoch_200.pt"
 
 # -------------------------------------------------------------------------------------------------
@@ -200,7 +201,11 @@ offsets = mocap_data["skeleton"]["offsets"].astype(np.float32)
 parents, children = mocap_data["skeleton"]["parents"], mocap_data["skeleton"]["children"]
 edge_list = [[p, c] for p in range(len(children)) for c in children[p]]
 
-joint_loss_weights = json.load(open(mocap_loss_weights_file))["joint_loss_weights"] if mocap_loss_weights_file else [1.0] * joint_count
+if mocap_loss_weights_file is not None:
+    with open(mocap_loss_weights_file) as f:
+        joint_loss_weights = json.load(f)["joint_loss_weights"]
+else:
+    joint_loss_weights = [1.0] * joint_count
 
 X, y, all_excerpts = [], [], []
 
@@ -301,6 +306,13 @@ optimizer = torch.optim.Adam(decoder.parameters(), lr=learning_rate)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.336)
 joint_loss_weights_t = torch.tensor(joint_loss_weights, dtype=torch.float32).reshape(1, 1, -1).to(device)
 
+mdn_loss_weights = []
+if train_root_trajectory:
+    mdn_loss_weights.extend([1.0, 1.0, 1.0]) # Root trajectory weights (unscaled)
+for w in joint_loss_weights:
+    mdn_loss_weights.extend([w] * 6)         # 6D rotation weights per joint
+mdn_loss_weights_t = torch.tensor(mdn_loss_weights, dtype=torch.float32).view(1, 1, 1, -1).to(device)
+
 def forward_kinematics(rotation_matrices, root_positions):
     t_offsets = torch.tensor(offsets).to(device)
     expanded_offsets = t_offsets.expand(rotation_matrices.shape[0], rotation_matrices.shape[1], offsets.shape[0], offsets.shape[1]).unsqueeze(-1)
@@ -339,10 +351,9 @@ def rot_loss(y, yhat):
     return torch.mean(torch.acos(torch.clamp((trace - 1) / 2, -0.9999, 0.9999)) * joint_loss_weights_t)
 
 def foot_sliding_loss(yhat):
-    """
-    Penalizes the velocity of foot joints when they are close to the ground (height < threshold).
-    yhat: The predicted poses sequence (batch, seq_len, pose_dim).
-    """
+    if not mocap_foot_joint_indices:
+        return torch.tensor(0.0, device=device)
+        
     if train_root_trajectory:
         yhat_root_traj = (yhat[:, :, :3] * root_pos_std_tensor) + root_pos_mean_tensor
         yhat_rot_6d = yhat[:, :, 3:].reshape(yhat.shape[0], yhat.shape[1], joint_count, 6)
@@ -350,34 +361,39 @@ def foot_sliding_loss(yhat):
         yhat_root_traj = torch.zeros((yhat.shape[0], yhat.shape[1], 3)).to(device)
         yhat_rot_6d = yhat.reshape(yhat.shape[0], yhat.shape[1], joint_count, 6)
 
-    # Compute global positions of all joints across the sequence
     yhat_pos = forward_kinematics(rot_to.r6d_to_mat(yhat_rot_6d), yhat_root_traj)
-    
-    # Extract foot positions (batch, seq_len, num_feet, 3)
     foot_positions = yhat_pos[:, :, mocap_foot_joint_indices, :]
     
-    # Calculate foot velocity between consecutive frames (batch, seq_len-1, num_feet, 3)
+    # Calculate velocity
     foot_velocities = foot_positions[:, 1:, :, :] - foot_positions[:, :-1, :, :]
     
-    # Calculate foot height (assuming Y is the up axis at index 1. If Z is up, use index 2)
-    # We take the height of the current frame for contact checking
-    foot_heights = foot_positions[:, :-1, :, 1] 
+    # FIX 1: Use linear distance (L2 norm) instead of squared velocity
+    linear_velocity = torch.norm(foot_velocities, dim=-1)  # (batch, seq_len-1, num_feet)
     
-    # Soft contact mask: 1.0 when on ground, approaches 0.0 as height increases
-    # We use ReLU to ensure negative heights (if they penetrate ground) are heavily penalized
+    foot_heights = foot_positions[:, :-1, :, mocap_up_coord_index] 
+    
+    # Create the soft mask
     contact_weights = torch.clamp(1.0 - (foot_heights / contact_height_threshold), min=0.0, max=1.0)
     
-    # Penalize the squared magnitude of velocity weighted by the contact mask
-    velocity_sq = torch.sum(foot_velocities ** 2, dim=-1)  # (batch, seq_len-1, num_feet)
-    sliding_penalty = torch.mean(velocity_sq * contact_weights)
-    
+    sliding_penalty = torch.mean(linear_velocity * contact_weights)
     return sliding_penalty
 
 def mdn_nll_loss(log_pi, mu, sigma, target):
     target = target.unsqueeze(2)
     var = sigma ** 2
-    log_normal = torch.sum(-0.5 * math.log(2 * math.pi) - torch.log(sigma) - 0.5 * ((target - mu) ** 2 / var), dim=-1) 
-    return -torch.logsumexp(log_pi + log_normal, dim=-1).mean()
+    
+    # Calculate log likelihood for each dimension
+    log_normal = -0.5 * math.log(2 * math.pi) - torch.log(sigma) - 0.5 * ((target - mu) ** 2 / var)
+    
+    # --- NEW CODE: Apply the joint weights to scale the log likelihoods ---
+    log_normal = log_normal * mdn_loss_weights_t
+    
+    # Sum over the features (input_dim)
+    log_normal = torch.sum(log_normal, dim=-1) 
+    
+    # Combine with mixture weights
+    log_mix = log_pi + log_normal 
+    return -torch.logsumexp(log_mix, dim=-1).mean()
 
 def sample_mdn(log_pi, mu, sigma, gaussian_temp=0.2, pi_temperature=1.5, top_p=0.9):
     batch_size, seq_len, K = log_pi.shape
@@ -547,8 +563,8 @@ def train(train_dataloader, test_dataloader, epochs):
         loss_history["rot"].append(np.mean(r_loss))
         loss_history["slide"].append(np.mean(s_loss))
         scheduler.step()
-
-        print(f"epoch {epoch + 1} : train: {np.mean(t_loss):01.4f} ... slide {np.mean(s_loss):01.4f} time {time.time()-start:01.2f}")
+        
+        print(f"epoch {epoch + 1} : train: {np.mean(t_loss):01.4f} test: {np.mean(te_loss):01.4f} nll {np.mean(n_loss):01.4f} pos {np.mean(p_loss):01.4f} rot {np.mean(r_loss):01.4f} slide {np.mean(s_loss):01.4f} time {time.time()-start:01.2f}")
 
     return loss_history
 

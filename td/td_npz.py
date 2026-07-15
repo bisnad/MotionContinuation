@@ -42,41 +42,41 @@ print(f"Using {device} device")
 # Mocap Settings
 # -------------------------------------------------------------------------------------------------
 
-mocap_file_path = "E:/Data/mocap/stocos/Solos/Canal_14-08-2023/fbx_50hz/"
-mocap_files = ["Muriel_Embodied_Machine_variation.fbx"]
-mocap_valid_time_ranges = [ [ [ 4.0, 127.0 ] ] ]  # in seconds
-mocap_pos_scale = 1.0
-mocap_fps = 50
-
-
 """
-mocap_file_path = "E:/Data/mocap/stocos/Solos/Canal_14-08-2023/bvh_50hz/"
-mocap_files = ["Muriel_Embodied_Machine_variation.bvh"]
-mocap_valid_time_ranges = [ [ [ 4.0, 127.0 ] ] ]  # in seconds
-mocap_pos_scale = 1.0
-mocap_fps = 50
-"""
-
-"""
-mocap_file_path = "../../../Data/Mocap/Pose3D/Stocos/Solos/"
-mocap_files = ["Stocos_DoubleBind_MediaPipe.fbx"]
-mocap_valid_time_ranges = [ [ [ 1.0, 553.0 ] ] ]  # in seconds
+# XSens MVN2OSC
+mocap_file_path = "C:/Users/dbisig/Projects/Premiere/Software_Git2/MotionUtilities/SensorRecorder_v2/recordings/"
+mocap_files = ["MVN_OSC_debug.npz"]
 mocap_pos_scale = 1.0
 mocap_fps = 30
-"""
+mocap_valid_time_ranges = [ [ [ 0.0, 30.0 ] ] ]  # in seconds
+
+mocap_parents = [-1, 0, 1, 2, 3, 0, 5, 6, 7, 0, 9, 10, 11, 12, 13, 14, 15, 12, 17, 18, 19, 12, 21]
+mocap_children = [[1, 5, 9], [2], [3], [4], [], [6], [7], [8], [], [10], [11], [12], [13, 17, 21], [14], [15], [16], [], [18], [19], [20], [], [22], []]
 
 mocap_loss_weights_file = None
-train_root_trajectory = True
+train_root_trajectory = False
+"""
+
+# Yolo MotionBert
+mocap_file_path = "C:/Users/dbisig/Projects/Premiere/Software_Git2/MotionUtilities/SensorRecorder_v2/recordings/"
+mocap_files = ["Muriel_DoubleBind_Yolo_MB_realtime.npz"]
+mocap_pos_scale = 1.0
+mocap_fps = 50
+mocap_valid_time_ranges = [ [ [ 0.0, 30.0 ] ] ]  # in seconds
+mocap_parents = [-1, 0, 1, 2, 0, 4, 5, 0, 7, 8, 9, 8, 11, 12, 8, 14, 15]
+mocap_children = [[1, 4, 7], [2], [3], [], [5], [6], [], [8], [9, 11, 14], [10], [], [12], [13], [], [15], [16], []]
+mocap_loss_weights_file = None
+train_root_trajectory = False
 
 # -------------------------------------------------------------------------------------------------
 # Save Paths Settings
 # -------------------------------------------------------------------------------------------------
 
-save_path = "results_test/"
+save_path = "results_Muriel_DoubleBind_Yolo_MB_realtime/"
 save_weights_path = save_path + "weights/"
 save_history_path = save_path + "history/"
 save_anims_path = save_path + "anims/"
-save_anim_formats = ["gif", "fbx"]
+save_anim_formats = ["gif"]
 
 os.makedirs(save_weights_path, exist_ok=True)
 os.makedirs(save_history_path, exist_ok=True)
@@ -86,7 +86,7 @@ os.makedirs(save_anims_path, exist_ok=True)
 # Model Settings
 # -------------------------------------------------------------------------------------------------
 
-mdn_num_mixtures = 20
+mdn_num_mixtures = 4
 decoder_layer_count = 6 
 decoder_head_count = 8
 decoder_embed_dim = 512 
@@ -97,28 +97,28 @@ decoder_dropout = 0.1
 # Training Settings
 # -------------------------------------------------------------------------------------------------
 
-batch_size = 32
+batch_size = 64
 test_percentage = 0.1
 
 seq_input_length = 64
-seq_output_length = 2
-seq_offset = 4
+seq_output_length = 4 # 10
+seq_offset = 1
 
-pi_temperature=2.0
+pi_temperature=1.0
 learning_rate = 1e-4
-pos_loss_scale = 0.1
+pos_loss_scale = 1.0
 rot_loss_scale = 1.0
 traj_loss_scale = 0.1
 nll_loss_scale = 1.0
-teacher_forcing_prob = 0.5
+teacher_forcing_prob = 0.5 # 0.0
 model_save_interval = 50
 
 epochs = 200
-save_history = True
+save_history = False
 
-save_weights = True
-load_weights = False
-decoder_weights_file = "results_Stocos_XSens_Embodied_Machine_v2_3/weights/decoder_weights_epoch_200.pt"
+save_weights = False
+load_weights = True
+decoder_weights_file = "results_Muriel_DoubleBind_Yolo_MB_realtime/weights/decoder_weights_epoch_200.pt"
 
 # -------------------------------------------------------------------------------------------------
 # Render Settings
@@ -129,121 +129,235 @@ view_azi = -90.0
 view_line_width = 1.0
 view_size = 4.0
 
-# -------------------------------------------------------------------------------------------------
-# Utility: Variable Timestamp Resampling (Time-Range Filtered)
-# -------------------------------------------------------------------------------------------------
 
-def resample_mocap_data(mocap_data, target_fps, time_ranges):
+# -------------------------------------------------------------------------------------------------
+# Quaternion & Interpolation Math Helpers
+# -------------------------------------------------------------------------------------------------
+def normalize_quat(q):
+    n = np.linalg.norm(q, axis=-1, keepdims=True)
+    n[n == 0] = 1.0
+    return q / n
+
+def enforce_quat_continuity(q):
+    q_out = q.copy()
+    for f in range(1, q_out.shape[0]):
+        dots = np.sum(q_out[f] * q_out[f - 1], axis=-1, keepdims=True)
+        q_out[f] = np.where(dots < 0.0, -q_out[f], q_out[f])
+    return q_out
+
+def quat_conjugate(q):
+    qc = q.copy()
+    qc[..., 0:3] *= -1.0
+    return qc
+
+def quat_multiply(q1, q2):
+    x1, y1, z1, w1 = q1[..., 0], q1[..., 1], q1[..., 2], q1[..., 3]
+    x2, y2, z2, w2 = q2[..., 0], q2[..., 1], q2[..., 2], q2[..., 3]
+    x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
+    y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
+    z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
+    w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
+    return np.stack([x, y, z, w], axis=-1)
+
+def quat_rotate(q, v):
+    vq = np.concatenate([v, np.zeros(v.shape[:-1] + (1,), dtype=v.dtype)], axis=-1)
+    return quat_multiply(quat_multiply(q, vq), quat_conjugate(q))[..., :3]
+
+def interp_vectors(times_src, values_src, times_dst):
+    out = np.zeros((len(times_dst),) + values_src.shape[1:], dtype=np.float32)
+    flat_src = values_src.reshape(values_src.shape[0], -1)
+    flat_out = out.reshape(len(times_dst), -1)
+    for k in range(flat_src.shape[1]):
+        flat_out[:, k] = np.interp(times_dst, times_src, flat_src[:, k])
+    return out
+
+# -------------------------------------------------------------------------------------------------
+# Resample NPZ Data & Extract Rigid Offsets
+# -------------------------------------------------------------------------------------------------
+def resample_mocap_data(np_data, target_fps, time_ranges):
     """
-    Interpolates and resamples variable-rate keyframe data to consistent 
-    joint array blocks shaped (num_frames, num_joints, 3) at target_fps,
-    only extracting the specified continuous segments defined in time_ranges.
+    Interpolates variable-rate npz arrays and dynamically calculates 
+    rigid skeletal offsets by un-rotating world bone vectors.
     """
-    times_dict = mocap_data["motion"].get("times", {})
-    joints = mocap_data["skeleton"]["joints"]
-    num_joints = len(joints)
+    pos_local_times = np_data["/mocap/0/joint/pos_local_timestamps"]
+    pos_local_values = np_data["/mocap/0/joint/pos_local_values"]
+    rot_local_times = np_data["/mocap/0/joint/rot_local_timestamps"]
+    rot_local_values = np_data["/mocap/0/joint/rot_local_values"]
     
-    pos_local = mocap_data["motion"]["pos_local"]
-    rot_local_euler = mocap_data["motion"]["rot_local_euler"]
+    pos_world_times = np_data["/mocap/0/joint/pos_world_timestamps"]
+    pos_world_values = np_data["/mocap/0/joint/pos_world_values"]
+    rot_world_times = np_data["/mocap/0/joint/rot_world_timestamps"]
+    rot_world_values = np_data["/mocap/0/joint/rot_world_values"]
     
-    def get_joint_data(data, j_idx):
-        if isinstance(data, list):
-            return data[j_idx]
-        else:
-            return data[:, j_idx, :]
-            
-    # Build global original time arrays for each joint
-    joint_times_list = []
-    for j_idx, j_name in enumerate(joints):
-        if j_name in times_dict:
-            j_times = times_dict[j_name]
-        else:
-            j_frames = len(get_joint_data(pos_local, j_idx))
-            orig_fps = mocap_data.get("frame_rate", target_fps)
-            j_times = np.arange(j_frames) / orig_fps
-        joint_times_list.append(j_times)
-        
+    num_joints = pos_local_values.shape[1] // 3
+    
+    # Reshape arrays to (frames, joints, dims)
+    pos_local = pos_local_values.reshape((-1, num_joints, 3)).astype(np.float32)
+    rot_local = rot_local_values.reshape((-1, num_joints, 4)).astype(np.float32)
+    pos_world = pos_world_values.reshape((-1, num_joints, 3)).astype(np.float32)
+    rot_world = rot_world_values.reshape((-1, num_joints, 4)).astype(np.float32)
+    
+    # Pre-process quaternions to prevent interpolation artifacts
+    rot_local = normalize_quat(enforce_quat_continuity(rot_local))
+    rot_world = normalize_quat(enforce_quat_continuity(rot_world))
+    
     resampled_segments = []
     
     for t_range in time_ranges:
         start_time, end_time = t_range[0], t_range[1]
-        target_times = np.arange(start_time, end_time, 1.0 / target_fps)
-        num_frames = len(target_times)
+        target_times = np.arange(start_time, end_time, 1.0 / target_fps, dtype=np.float32)
         
-        new_pos_local = np.zeros((num_frames, num_joints, 3))
-        new_rot_local_euler = np.zeros((num_frames, num_joints, 3))
+        # Interpolate
+        new_pos_local = interp_vectors(pos_local_times, pos_local, target_times)
+        new_rot_local = interp_vectors(rot_local_times, rot_local, target_times)
+        new_pos_world = interp_vectors(pos_world_times, pos_world, target_times)
+        new_rot_world = interp_vectors(rot_world_times, rot_world, target_times)
         
+        # Normalize interpolated quaternions
+        new_rot_local = normalize_quat(new_rot_local)
+        new_rot_world = normalize_quat(new_rot_world)
+        
+        # Calculate true rest offsets in local space
+        offsets = np.zeros((num_joints, 3), dtype=np.float32)
         for j_idx in range(num_joints):
-            j_times = joint_times_list[j_idx]
-            j_pos = get_joint_data(pos_local, j_idx)
-            j_rot = get_joint_data(rot_local_euler, j_idx)
-            
-            if len(j_times) == 0:
-                continue
+            parent_idx = mocap_parents[j_idx]
+            if parent_idx == -1:
+                offsets[j_idx] = 0.0
+            else:
+                # Bone vector in world space at frame 0
+                bone_world = new_pos_world[0, j_idx] - new_pos_world[0, parent_idx]
                 
-            if len(j_times) == 1:
-                new_pos_local[:, j_idx, :] = j_pos[0]
-                new_rot_local_euler[:, j_idx, :] = j_rot[0]
-                continue
+                # Parent's world rotation at frame 0
+                parent_rot_world = new_rot_world[0, parent_idx:parent_idx+1]
+                parent_rot_world_inv = quat_conjugate(parent_rot_world)
                 
-            for i in range(3):
-                new_pos_local[:, j_idx, i] = np.interp(target_times, j_times, j_pos[:, i])
-                
-            j_rot_rad = np.deg2rad(j_rot)
-            j_rot_rad_unwrapped = np.unwrap(j_rot_rad, axis=0)
-            j_rot_deg_unwrapped = np.rad2deg(j_rot_rad_unwrapped)
-            
-            for i in range(3):
-                new_rot_local_euler[:, j_idx, i] = np.interp(target_times, j_times, j_rot_deg_unwrapped[:, i])
-                
-        # Create an independent data dictionary for this specific temporal segment
-        segment_data = copy.deepcopy(mocap_data)
-        segment_data["motion"]["pos_local"] = new_pos_local
-        segment_data["motion"]["rot_local_euler"] = new_rot_local_euler
-        segment_data["frame_rate"] = target_fps
-        
-        if "times" in segment_data["motion"]:
-            del segment_data["motion"]["times"]
-            
+                # Un-rotate the bone vector to derive the constant local offset
+                offsets[j_idx] = quat_rotate(parent_rot_world_inv, bone_world.reshape(1, 3))[0]
+
+        segment_data = {
+            "frame_rate": target_fps,
+            "rot_sequence": "XYZ",
+            "skeleton": {
+                "offsets": offsets,
+                "parents": mocap_parents,
+                "children": mocap_children,
+                "joints": [f"joint_{j}" for j in range(num_joints)]
+            },
+            "motion": {
+                "pos_local": new_pos_local,
+                "rot_local": new_rot_local
+            }
+        }
         resampled_segments.append(segment_data)
         
     return resampled_segments
 
 # -------------------------------------------------------------------------------------------------
-# Load Mocap Data
+# NPZ Loading Loop
 # -------------------------------------------------------------------------------------------------
-
-bvh_tools = bvh.BVH_Tools()
-fbx_tools = fbx.FBX_Tools()
-mocap_tools = mocap.Mocap_Tools()
-
 all_mocap_data = []
+
+# Move offsets to PyTorch to compute exact kinematic bounds matching the training FK
+def extract_true_offsets(pos_world_tensor, rot_local_tensor, parents_list):
+    """
+    Reverse-engineers the true local skeletal offsets by computing the world-space
+    bone vector at frame 0 and un-rotating it by the parent's world rotation matrix.
+    Uses native PyTorch tools matching the script's own RotationUtils.
+    """
+    num_joints = pos_world_tensor.shape[1]
+    
+    # 1. Convert local quaternions at frame 0 to rotation matrices
+    # (Assuming the original script's rotnp.quat_to_r6d expects [w, x, y, z])
+    rot_local_0 = rot_local_tensor[0]
+    local_mats = rot_to.r6d_to_mat(rot_to.mat_to_r6d(rot_to.quat_to_mat(rot_local_0))) 
+    
+    # 2. Build World Rotation Matrices for frame 0
+    world_mats = [None] * num_joints
+    for j in range(num_joints):
+        p_idx = parents_list[j]
+        if p_idx == -1:
+            world_mats[j] = local_mats[j]
+        else:
+            world_mats[j] = torch.matmul(world_mats[p_idx], local_mats[j])
+            
+    # 3. Compute static local offsets
+    offsets = np.zeros((num_joints, 3), dtype=np.float32)
+    pos_w_0 = pos_world_tensor[0]
+    
+    for j in range(num_joints):
+        p_idx = parents_list[j]
+        if p_idx == -1:
+            offsets[j] = 0.0
+        else:
+            # Bone vector in world space
+            bone_world = pos_w_0[j] - pos_w_0[p_idx]
+            
+            # The parent's world rotation matrix
+            parent_world_mat = world_mats[p_idx]
+            
+            # The inverse of a rotation matrix is its transpose.
+            # We multiply the transposed parent rotation matrix by the world bone vector
+            # to map the world vector back into the parent's local coordinate space.
+            bone_local = torch.matmul(
+                parent_world_mat.transpose(-1, -2), 
+                bone_world.unsqueeze(-1)
+            ).squeeze(-1)
+            
+            offsets[j] = bone_local.cpu().numpy()
+            
+    return offsets
+
 
 for i, mocap_file in enumerate(mocap_files):
     print("process file ", mocap_file)
     valid_time_ranges = mocap_valid_time_ranges[i]
     
-    if mocap_file.endswith(".bvh") or mocap_file.endswith(".BVH"):
-        bvh_data = bvh_tools.load(os.path.join(mocap_file_path, mocap_file))
-        mocap_data_raw = mocap_tools.bvh_to_mocap(bvh_data)
-        
-        # Returns a list of segments matching the user-specified time ranges
-        segments = resample_mocap_data(mocap_data_raw, mocap_fps, valid_time_ranges)
-        
-        for segment in segments:
-            segment["motion"]["rot_local"] = mocap_tools.euler_to_quat_bvh(segment["motion"]["rot_local_euler"], segment["rot_sequence"])
-            all_mocap_data.append(segment)
+    if mocap_file.endswith(".npz") or mocap_file.endswith(".NPZ"):
+        with open(os.path.join(mocap_file_path, mocap_file), "rb") as f:
+            np_data = dict(np.load(f))
             
-    elif mocap_file.endswith(".fbx") or mocap_file.endswith(".FBX"):
-        fbx_data = fbx_tools.load(os.path.join(mocap_file_path, mocap_file))
-        mocap_data_raw = mocap_tools.fbx_to_mocap(fbx_data)[0] 
+        pos_local_values = np_data["/mocap/0/joint/pos_local_values"]
+        rot_local_values = np_data["/mocap/0/joint/rot_local_values"]
         
-        # Returns a list of segments matching the user-specified time ranges
-        segments = resample_mocap_data(mocap_data_raw, mocap_fps, valid_time_ranges)
+        num_joints = pos_local_values.shape[1] // 3
         
-        for segment in segments:
-            segment["motion"]["rot_local"] = mocap_tools.euler_to_quat(segment["motion"]["rot_local_euler"], segment["rot_sequence"])
-            all_mocap_data.append(segment)
+        # Reshape to (frames, joints, dims)
+        pos_local = pos_local_values.reshape((-1, num_joints, 3)).astype(np.float32)
+        rot_local = rot_local_values.reshape((-1, num_joints, 4)).astype(np.float32)
+        
+        # We also need pos_world to calculate the correct bone lengths
+        pos_world_values = np_data["/mocap/0/joint/pos_world_values"]
+        pos_world = pos_world_values.reshape((-1, num_joints, 3)).astype(np.float32)
+
+        # Convert to tensors briefly just for the offset math so it is perfectly aligned
+        # with how your `forward_kinematics` solver performs the operations later.
+        t_pos_world = torch.from_numpy(pos_world).to(device)
+        t_rot_local = torch.from_numpy(rot_local).to(device)
+        
+        # Generate the strict, correct offsets
+        offsets = extract_true_offsets(t_pos_world, t_rot_local, mocap_parents)
+
+        # Slice data if you have time ranges (optional resampling logic)
+        for t_range in valid_time_ranges:
+            start_f = int(t_range[0] * mocap_fps)
+            end_f = int(t_range[1] * mocap_fps)
+            
+            segment_data = {
+                "frame_rate": mocap_fps,
+                "rot_sequence": "XYZ",
+                "skeleton": {
+                    "offsets": offsets,
+                    "parents": mocap_parents,
+                    "children": mocap_children,
+                    "joints": [f"joint_{j}" for j in range(num_joints)]
+                },
+                "motion": {
+                    "pos_local": pos_local[start_f:end_f],
+                    "rot_local": rot_local[start_f:end_f],
+                    "pos_world": pos_world[start_f:end_f]
+                }
+            }
+            all_mocap_data.append(segment_data)
 
 for mocap_data in all_mocap_data:
     mocap_data["skeleton"]["offsets"] *= mocap_pos_scale
@@ -420,6 +534,13 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.336
 
 joint_loss_weights_t = torch.tensor(joint_loss_weights, dtype=torch.float32).reshape(1, 1, -1).to(device)
 
+mdn_loss_weights = []
+if train_root_trajectory:
+    mdn_loss_weights.extend([1.0, 1.0, 1.0]) # Root trajectory weights (unscaled)
+for w in joint_loss_weights:
+    mdn_loss_weights.extend([w] * 6)         # 6D rotation weights per joint
+mdn_loss_weights_t = torch.tensor(mdn_loss_weights, dtype=torch.float32).view(1, 1, 1, -1).to(device)
+
 def forward_kinematics(rotation_matrices, root_positions):
     t_offsets = torch.tensor(offsets).to(device)
     expanded_offsets = t_offsets.expand(rotation_matrices.shape[0], rotation_matrices.shape[1], offsets.shape[0], offsets.shape[1]).unsqueeze(-1)
@@ -480,8 +601,17 @@ def rot_loss(y, yhat):
 def mdn_nll_loss(log_pi, mu, sigma, target):
     target = target.unsqueeze(2)
     var = sigma ** 2
+    
+    # Calculate log likelihood for each dimension
     log_normal = -0.5 * math.log(2 * math.pi) - torch.log(sigma) - 0.5 * ((target - mu) ** 2 / var)
+    
+    # --- NEW CODE: Apply the joint weights to scale the log likelihoods ---
+    log_normal = log_normal * mdn_loss_weights_t
+    
+    # Sum over the features (input_dim)
     log_normal = torch.sum(log_normal, dim=-1) 
+    
+    # Combine with mixture weights
     log_mix = log_pi + log_normal 
     return -torch.logsumexp(log_mix, dim=-1).mean()
 
@@ -551,14 +681,25 @@ def train_step(pose_sequences, target_poses, teacher_forcing):
     output_poses_length = target_poses.shape[1]
 
     if teacher_forcing:
+        # We want to use the full pose_sequences as the prompt, 
+        # and all target poses EXCEPT the last one as the ongoing inputs
         _target_inputs = target_poses[:, :-1, :]
+        
+        # The input to the transformer is the prompt + shifted targets
         _full_input = torch.cat((pose_sequences, _target_inputs), dim=1)
 
+        # Forward pass with causal masking (so step t only sees up to step t)
         log_pi, mu, sigma = decoder(_full_input, return_sequence=True)
 
+        # We evaluate the loss only on the outputs corresponding to the target sequence.
+        # Because we gave it `output_poses_length` tokens (last token of pose_sequences + target_poses[:-1]), 
+        # it predicts exactly `output_poses_length` targets.
         _log_pi_for_loss = log_pi[:, -output_poses_length:, :]
         _mu_for_loss = mu[:, -output_poses_length:, :, :]
         _sigma_for_loss = sigma[:, -output_poses_length:, :, :]
+        
+        # The targets remain the same. The output of the model at the end of `pose_sequences`
+        # is trained to predict `target_poses[:, 0, :]`, and so on.
         _target_poses_for_loss = target_poses
     else:
         _input_poses = pose_sequences 
@@ -744,6 +885,8 @@ def export_sequence_anim(pose_sequence, file_name):
     root_trajectory = torch.tensor(np.expand_dims(root_trajectory, axis=0)).to(device)
     skel_sequence = forward_kinematics(rot_matrices, root_trajectory)
     skel_sequence = skel_sequence.detach().cpu().numpy().squeeze()
+    
+    #print("skel_sequence proc ", skel_sequence)
 
     view_min, view_max = utils.get_equal_mix_max_positions(skel_sequence)
     skel_images = poseRenderer.create_pose_images(skel_sequence, view_min, view_max, view_ele, view_azi, view_line_width, view_size, view_size)
@@ -905,7 +1048,8 @@ else:
 seq_index = 0
 # Defensively bound start/lengths just in case user-supplied valid time cuts sequence shorter than arbitrary 1000/10000 constants
 seq_start = min(1000, max(0, len(orig_sequence) - seq_input_length - 2)) 
-seq_length = min(10000, len(orig_sequence) - seq_start)
+seq_start = 0
+seq_length = min(1000, len(orig_sequence) - seq_start)
 
 if "gif" in save_anim_formats:
     export_sequence_anim(orig_sequence[seq_start:seq_start+seq_length], "{}orig_sequence_seq_start_{}_length_{}.gif".format(save_anims_path, seq_start, seq_length))
