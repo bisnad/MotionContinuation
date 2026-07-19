@@ -1,7 +1,7 @@
-
 """
 Rotational Representations and Utilities (PyTorch)
 Contains 6D representation, Quaternions, and Angle-Axis functions utilizing PyTorch tensors.
+Aligned to [x, y, z, w] quaternion format.
 """
 
 import torch
@@ -17,12 +17,8 @@ class RotationUtilsTorch:
     @staticmethod
     def orthogonalize_r6d(rot_6d):
         matrices = RotationUtilsTorch.r6d_to_mat(rot_6d)
-        
-        # Extract the X and Y column vectors [..., 3]
         x = matrices[..., :, 0]
         y = matrices[..., :, 1]
-        
-        # Concatenate to form proper [..., 6] format
         return torch.cat((x, y), dim=-1)
 
     @staticmethod
@@ -75,39 +71,41 @@ class RotationUtilsTorch:
         return res_6d
 
     # ==============================
-    # Quaternions
+    # Quaternions [x, y, z, w]
     # ==============================
 
     @staticmethod
     def mag(q):
-        """Return magnitude of quaternion"""
         return torch.linalg.norm(q, dim=-1, keepdim=True)
 
     @staticmethod
     def conj(q):
-        """Returns conjugate of quaternion"""
-        return torch.cat((q[..., :1], q[..., -3:] * -1), dim=-1)
+        """Returns conjugate of quaternion [x, y, z, w] -> [-x, -y, -z, w]"""
+        return torch.cat((q[..., :3] * -1, q[..., 3:]), dim=-1)
 
     @staticmethod
     def inv(q):
-        """Returns inverse of quaternion"""
         return RotationUtilsTorch.conj(q) / RotationUtilsTorch.mag(q)
 
     @staticmethod
     def normalize(q):
-        """Returns normalized quaternion"""
         return nnF.normalize(q, dim=-1)
 
     @staticmethod
     def mul(q, r):
         """Multiply quaternion(s) q with quaternion(s) r"""
         original_shape = q.shape
-        terms = torch.bmm(r.reshape(-1, 4, 1), q.reshape(-1, 1, 4))
-        w = terms[:, 0, 0] - terms[:, 1, 1] - terms[:, 2, 2] - terms[:, 3, 3]
-        x = terms[:, 0, 1] + terms[:, 1, 0] - terms[:, 2, 3] + terms[:, 3, 2]
-        y = terms[:, 0, 2] + terms[:, 1, 3] + terms[:, 2, 0] - terms[:, 3, 1]
-        z = terms[:, 0, 3] - terms[:, 1, 2] + terms[:, 2, 1] + terms[:, 3, 0]
-        return torch.stack((w, x, y, z), dim=1).view(original_shape)
+        q = q.reshape(-1, 4)
+        r = r.reshape(-1, 4)
+        
+        x1, y1, z1, w1 = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
+        x2, y2, z2, w2 = r[:, 0], r[:, 1], r[:, 2], r[:, 3]
+        
+        w = w1*w2 - x1*x2 - y1*y2 - z1*z2
+        x = w1*x2 + x1*w2 + y1*z2 - z1*y2
+        y = w1*y2 - x1*z2 + y1*w2 + z1*x2
+        z = w1*z2 + x1*y2 - y1*x2 + z1*w2
+        return torch.stack((x, y, z, w), dim=1).view(original_shape)
 
     @staticmethod
     def rot(q, v):
@@ -115,16 +113,18 @@ class RotationUtilsTorch:
         original_shape = list(v.shape)
         q = q.reshape(-1, 4)
         v = v.reshape(-1, 3)
-        qvec = q[:, 1:]
+        
+        qvec = q[:, :3] # x, y, z
+        qw = q[:, 3:4]  # w
         uv = torch.cross(qvec, v, dim=1)
         uuv = torch.cross(qvec, uv, dim=1)
-        return (v + 2 * (q[:, :1] * uv + uuv)).view(original_shape)
+        return (v + 2 * (qw * uv + uuv)).view(original_shape)
 
     @staticmethod
     def quat_to_mat(quats):
-        """Convert [w, x, y, z] quaternions to 3x3 rotation matrices."""
+        """Convert [x, y, z, w] quaternions to 3x3 rotation matrices."""
         quats = nnF.normalize(quats, dim=-1)
-        w, x, y, z = quats[..., 0], quats[..., 1], quats[..., 2], quats[..., 3]
+        x, y, z, w = quats[..., 0], quats[..., 1], quats[..., 2], quats[..., 3]
 
         xx, yy, zz = x * x, y * y, z * z
         xy, xz, yz = x * y, x * z, y * z
@@ -138,7 +138,7 @@ class RotationUtilsTorch:
 
     @staticmethod
     def mat_to_quat(mat):
-        """Convert 3x3 rotation matrices to [w, x, y, z] quaternions."""
+        """Convert 3x3 rotation matrices to [x, y, z, w] quaternions."""
         m00, m01, m02 = mat[..., 0, 0], mat[..., 0, 1], mat[..., 0, 2]
         m10, m11, m12 = mat[..., 1, 0], mat[..., 1, 1], mat[..., 1, 2]
         m20, m21, m22 = mat[..., 2, 0], mat[..., 2, 1], mat[..., 2, 2]
@@ -152,19 +152,19 @@ class RotationUtilsTorch:
         q_y = 0.5 * safe_sqrt(1.0 - m00 + m11 - m22) * torch.sign(m02 - m20)
         q_z = 0.5 * safe_sqrt(1.0 - m00 - m11 + m22) * torch.sign(m10 - m01)
 
-        quats = torch.stack([q_w, q_x, q_y, q_z], dim=-1)
+        quats = torch.stack([q_x, q_y, q_z, q_w], dim=-1)
         return nnF.normalize(quats, dim=-1)
 
     @staticmethod
     def quat_to_euler(q, order='xyz', degrees=True):
-        """Convert (w, x, y, z) quaternions to euler angles."""
-        q0, q1, q2, q3 = q[..., 0], q[..., 1], q[..., 2], q[..., 3]
-        es = torch.empty(q0.shape + (3,), device=q.device, dtype=q.dtype)
+        """Convert [x, y, z, w] quaternions to euler angles."""
+        x, y, z, w = q[..., 0], q[..., 1], q[..., 2], q[..., 3]
+        es = torch.empty(x.shape + (3,), device=q.device, dtype=q.dtype)
 
         if order == 'xyz':
-            es[..., 2] = torch.atan2(2 * (q0 * q3 - q1 * q2), q0 * q0 + q1 * q1 - q2 * q2 - q3 * q3)
-            es[..., 1] = torch.asin((2 * (q1 * q3 + q0 * q2)).clip(-1, 1))
-            es[..., 0] = torch.atan2(2 * (q0 * q1 - q2 * q3), q0 * q0 - q1 * q1 - q2 * q2 + q3 * q3)
+            es[..., 2] = torch.atan2(2 * (w * z - x * y), w * w + x * x - y * y - z * z)
+            es[..., 1] = torch.asin((2 * (x * z + w * y)).clip(-1, 1))
+            es[..., 0] = torch.atan2(2 * (w * x - y * z), w * w - x * x - y * y + z * z)
         else:
             raise NotImplementedError(f'Cannot convert to ordering {order}')
 
@@ -174,7 +174,6 @@ class RotationUtilsTorch:
 
     @staticmethod
     def slerp(q0, q1, t):
-        """Spherical Linear Interpolation between quaternions."""
         dot = (q0 * q1).sum(dim=-1, keepdim=True)
         q1 = torch.where(dot < 0, -q1, q1)
         dot = torch.clamp(torch.abs(dot), -1.0, 1.0)
@@ -194,8 +193,7 @@ class RotationUtilsTorch:
     # ==============================
 
     @staticmethod
-    def aa_to_quat(rots, form='wxyz', unified_orient=True):
-        """Convert angle-axis representation to quaternion"""
+    def aa_to_quat(rots, form='xyzw', unified_orient=True):
         angles = rots.norm(dim=-1, keepdim=True)
         norm = angles.clone()
         norm[norm < 1e-8] = 1
@@ -203,23 +201,19 @@ class RotationUtilsTorch:
         quats = torch.empty(rots.shape[:-1] + (4,), device=rots.device, dtype=rots.dtype)
         angles = angles * 0.5
 
-        if form == 'wxyz':
-            quats[..., 0] = torch.cos(angles.squeeze(-1))
-            quats[..., 1:] = torch.sin(angles) * axis
-        elif form == 'xyzw':
-            quats[..., :3] = torch.sin(angles) * axis
-            quats[..., 3] = torch.cos(angles.squeeze(-1))
+        # Hardcode to xyzw target mapping regardless of input
+        quats[..., :3] = torch.sin(angles) * axis
+        quats[..., 3] = torch.cos(angles.squeeze(-1))
 
         if unified_orient:
-            idx = quats[..., 0] < 0
+            idx = quats[..., 3] < 0
             quats[idx, :] *= -1
         return quats
 
     @staticmethod
     def quat_to_aa(quats):
-        """Convert quaternions to angle-axis representation"""
-        _cos = quats[..., 0]
-        xyz = quats[..., 1:]
+        xyz = quats[..., :3]
+        _cos = quats[..., 3]
         _sin = xyz.norm(dim=-1)
         norm = _sin.clone()
         norm[norm < 1e-7] = 1

@@ -1,7 +1,7 @@
-
 """
 Rotational Representations and Utilities (NumPy)
 Contains 6D representation, Quaternions, and Angle-Axis functions utilizing NumPy and SciPy.
+Aligned to [x, y, z, w] quaternion format.
 """
 
 import numpy as np
@@ -39,7 +39,7 @@ class RotationUtilsNumpy:
     def quat_to_r6d(quats):
         orig_shape = quats.shape
         quats_flat = quats.reshape(-1, 4)
-        matrices = R.from_quat(quats_flat, scalar_first=True).as_matrix()
+        matrices = R.from_quat(quats_flat).as_matrix() # Default SciPy is x,y,z,w
         matrices = matrices.reshape(orig_shape[:-1] + (3, 3))
         return RotationUtilsNumpy.mat_to_r6d(matrices)
 
@@ -47,7 +47,7 @@ class RotationUtilsNumpy:
     def r6d_to_quat(poses_6d):
         matrices = RotationUtilsNumpy.r6d_to_mat(poses_6d)
         orig_shape = matrices.shape
-        quats = R.from_matrix(matrices.reshape(-1, 3, 3)).as_quat(scalar_first=True)
+        quats = R.from_matrix(matrices.reshape(-1, 3, 3)).as_quat() # Default SciPy is x,y,z,w
         return quats.reshape(orig_shape[:-2] + (4,)).astype(np.float32)
 
     @staticmethod
@@ -75,77 +75,72 @@ class RotationUtilsNumpy:
         return res_6d
 
     # ==============================
-    # Quaternions
+    # Quaternions [x, y, z, w]
     # ==============================
 
     @staticmethod
     def mag(q):
-        """Return magnitude of quaternion"""
         return np.linalg.norm(q, axis=-1, keepdims=True)
 
     @staticmethod
     def conj(q):
-        """Returns conjugate of quaternion"""
-        return np.concatenate((q[..., :1], q[..., -3:] * -1), axis=-1)
+        """Returns conjugate of quaternion [x, y, z, w] -> [-x, -y, -z, w]"""
+        return np.concatenate((q[..., :3] * -1, q[..., 3:]), axis=-1)
 
     @staticmethod
     def inv(q):
-        """Returns inverse of quaternion"""
         return RotationUtilsNumpy.conj(q) / RotationUtilsNumpy.mag(q)
 
     @staticmethod
     def normalize(q):
-        """Returns normalized quaternion"""
         return q / np.linalg.norm(q, axis=-1, keepdims=True)
 
     @staticmethod
     def mul(q, r):
-        """Multiply quaternion(s) q with quaternion(s) r"""
         q_orig = q.shape
         q = q.reshape(-1, 4)
         r = r.reshape(-1, 4)
 
-        w = q[:,0]*r[:,0] - q[:,1]*r[:,1] - q[:,2]*r[:,2] - q[:,3]*r[:,3]
-        x = q[:,0]*r[:,1] + q[:,1]*r[:,0] + q[:,2]*r[:,3] - q[:,3]*r[:,2]
-        y = q[:,0]*r[:,2] - q[:,1]*r[:,3] + q[:,2]*r[:,0] + q[:,3]*r[:,1]
-        z = q[:,0]*r[:,3] + q[:,1]*r[:,2] - q[:,2]*r[:,1] + q[:,3]*r[:,0]
+        x1, y1, z1, w1 = q[:,0], q[:,1], q[:,2], q[:,3]
+        x2, y2, z2, w2 = r[:,0], r[:,1], r[:,2], r[:,3]
 
-        return np.stack((w, x, y, z), axis=-1).reshape(q_orig)
+        w = w1*w2 - x1*x2 - y1*y2 - z1*z2
+        x = w1*x2 + x1*w2 + y1*z2 - z1*y2
+        y = w1*y2 - x1*z2 + y1*w2 + z1*x2
+        z = w1*z2 + x1*y2 - y1*x2 + z1*w2
+
+        return np.stack((x, y, z, w), axis=-1).reshape(q_orig)
 
     @staticmethod
     def rot(q, v):
-        """Rotate vector(s) v about the rotation described by quaternion(s) q"""
         q_orig = q.shape
         v_orig = v.shape
         q = q.reshape(-1, 4)
         v = v.reshape(-1, 3)
 
-        qvec = q[:, 1:]
+        qvec = q[:, :3] # x,y,z
+        qw = q[:, 3:4]  # w
         uv = np.cross(qvec, v)
         uuv = np.cross(qvec, uv)
-        return (v + 2 * (q[:, :1] * uv + uuv)).reshape(v_orig)
+        return (v + 2 * (qw * uv + uuv)).reshape(v_orig)
 
     @staticmethod
     def quat_to_mat(q):
-        """Convert (w, x, y, z) quaternions to 3x3 rotation matrix"""
-        return R.from_quat(q.reshape(-1, 4), scalar_first=True).as_matrix().reshape(q.shape[:-1] + (3, 3))
+        return R.from_quat(q.reshape(-1, 4)).as_matrix().reshape(q.shape[:-1] + (3, 3))
 
     @staticmethod
     def mat_to_quat(mat):
-        """Convert 3x3 rotation matrices to (w, x, y, z) quaternions."""
         orig_shape = mat.shape
         mat_flat = mat.reshape(-1, 3, 3)
-        quats = R.from_matrix(mat_flat).as_quat(scalar_first=True)
+        quats = R.from_matrix(mat_flat).as_quat()
         return quats.reshape(orig_shape[:-2] + (4,)).astype(np.float32)
 
     @staticmethod
     def quat_to_euler(q, order='xyz', degrees=True):
-        """Convert (w, x, y, z) quaternions to xyz euler angles."""
-        return R.from_quat(q.reshape(-1, 4), scalar_first=True).as_euler(order, degrees=degrees).reshape(q.shape[:-1] + (3,))
+        return R.from_quat(q.reshape(-1, 4)).as_euler(order, degrees=degrees).reshape(q.shape[:-1] + (3,))
 
     @staticmethod
     def slerp(q0, q1, t):
-        """Spherical Linear Interpolation between quaternions."""
         orig_shape = q0.shape
         q0 = q0.reshape(-1, 4)
         q1 = q1.reshape(-1, 4)
@@ -167,10 +162,8 @@ class RotationUtilsNumpy:
         res = np.zeros_like(q0_n)
         mask = sin_theta > 1e-6
 
-        # Linear fallback for small angles
         res[~mask] = (1 - t[~mask, None]) * q0_n[~mask] + t[~mask, None] * q1_n[~mask]
 
-        # Slerp for larger angles
         w0 = np.sin((1 - t[mask]) * theta[mask]) / sin_theta[mask]
         w1 = np.sin(t[mask] * theta[mask]) / sin_theta[mask]
         res[mask] = w0[:, None] * q0_n[mask] + w1[:, None] * q1_n[mask]
@@ -179,7 +172,6 @@ class RotationUtilsNumpy:
 
     @staticmethod
     def fix_continuity(q):
-        """Enforce quaternion continuity across the time dimension."""
         result = q.copy()
         dot_products = np.sum(q[1:] * q[:-1], axis=-1)
         mask = dot_products < 0
@@ -193,7 +185,6 @@ class RotationUtilsNumpy:
 
     @staticmethod
     def expmap_to_quat(e):
-        """Convert axis-angle rotations (aka exponential maps) to quaternions."""
         original_shape = list(e.shape)
         original_shape[-1] = 4
         e = e.reshape(-1, 3)
@@ -201,4 +192,4 @@ class RotationUtilsNumpy:
         theta = np.linalg.norm(e, axis=1).reshape(-1, 1)
         w = np.cos(0.5 * theta).reshape(-1, 1)
         xyz = 0.5 * np.sinc(0.5 * theta / np.pi) * e
-        return np.concatenate((w, xyz), axis=1).reshape(original_shape)
+        return np.concatenate((xyz, w), axis=1).reshape(original_shape)
