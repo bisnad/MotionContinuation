@@ -5,7 +5,9 @@ import transforms3d as t3d
 from scipy.spatial.transform import Rotation
 from common import bvh_tools as bvh
 from common import fbx_tools as fbx
+from common.rotation_utils_numpy import RotationUtilsNumpy as rot_np
 import copy
+import json
 
 class Mocap_Tools:
 
@@ -374,8 +376,201 @@ class Mocap_Tools:
             #values = values[start_frame:end_frame, ...]
             
         return mocap_data_excerpt
-            
- 
+
+    # -------------------------------------------------------------------------------------------------
+    # Utility: Math Helpers
+    # -------------------------------------------------------------------------------------------------
+
+    @staticmethod
+    def interp_vectors(times_src, values_src, times_dst):
+        out = np.zeros((len(times_dst),) + values_src.shape[1:], dtype=np.float32)
+        flat_src = values_src.reshape(values_src.shape[0], -1)
+        flat_out = out.reshape(len(times_dst), -1)
+        for k in range(flat_src.shape[1]):
+            flat_out[:, k] = np.interp(times_dst, times_src, flat_src[:, k])
+        return out
+
+    # -------------------------------------------------------------------------------------------------
+    # Utility: Helpers for NPZ
+    # -------------------------------------------------------------------------------------------------
+
+    @staticmethod
+    def build_children_from_parents(parents):
+        children = [[] for _ in range(len(parents))]
+        for j_idx, p_idx in enumerate(parents):
+            if p_idx >= 0:
+                children[p_idx].append(j_idx)
+        return children
+
+    @staticmethod
+    def load_npz_topology(json_path):
+        with open(json_path, "r") as f:
+            topo = json.load(f)
+        parents = topo["jointParents"]
+        children = topo.get("jointChildren", Mocap_Tools.build_children_from_parents(parents))
+        joints = topo.get("jointNames", [f"joint_{j}" for j in range(len(parents))])
+        return parents, children, joints
+
+    # -------------------------------------------------------------------------------------------------
+    # Utility: Euler Timestamp Resampling for FBX/BVH
+    # -------------------------------------------------------------------------------------------------
+
+    @staticmethod
+    def resample_euler_mocap_data(mocap_data, target_fps, time_ranges):
+        times_dict = mocap_data["motion"].get("times", {})
+        joints = mocap_data["skeleton"]["joints"]
+        num_joints = len(joints)
+
+        pos_local = mocap_data["motion"]["pos_local"]
+        rot_local_euler = mocap_data["motion"]["rot_local_euler"]
+
+        def get_joint_data(data, j_idx):
+            if isinstance(data, list):
+                return data[j_idx]
+            else:
+                return data[:, j_idx, :]
+
+        joint_times_list = []
+        for j_idx, j_name in enumerate(joints):
+            if j_name in times_dict:
+                j_times = times_dict[j_name]
+            else:
+                j_frames = len(get_joint_data(pos_local, j_idx))
+                orig_fps = mocap_data.get("frame_rate", target_fps)
+                j_times = np.arange(j_frames) / orig_fps
+            joint_times_list.append(j_times)
+
+        if time_ranges is None:
+            max_t = 0.0
+            for jt in joint_times_list:
+                if len(jt) > 0:
+                    max_t = max(max_t, jt[-1])
+            time_ranges = [[0.0, max_t]]
+
+        resampled_segments = []
+
+        for t_range in time_ranges:
+            start_time, end_time = t_range[0], t_range[1]
+            target_times = np.arange(start_time, end_time, 1.0 / target_fps)
+            num_frames = len(target_times)
+
+            if num_frames == 0:
+                continue
+
+            new_pos_local = np.zeros((num_frames, num_joints, 3))
+            new_rot_local_euler = np.zeros((num_frames, num_joints, 3))
+
+            for j_idx in range(num_joints):
+                j_times = joint_times_list[j_idx]
+                j_pos = get_joint_data(pos_local, j_idx)
+                j_rot = get_joint_data(rot_local_euler, j_idx)
+
+                if len(j_times) == 0:
+                    continue
+
+                if len(j_times) == 1:
+                    new_pos_local[:, j_idx, :] = j_pos[0]
+                    new_rot_local_euler[:, j_idx, :] = j_rot[0]
+                    continue
+
+                for i in range(3):
+                    new_pos_local[:, j_idx, i] = np.interp(target_times, j_times, j_pos[:, i])
+
+                j_rot_rad = np.deg2rad(j_rot)
+                j_rot_rad_unwrapped = np.unwrap(j_rot_rad, axis=0)
+                j_rot_deg_unwrapped = np.rad2deg(j_rot_rad_unwrapped)
+
+                for i in range(3):
+                    new_rot_local_euler[:, j_idx, i] = np.interp(target_times, j_times, j_rot_deg_unwrapped[:, i])
+
+            segment_data = copy.deepcopy(mocap_data)
+            segment_data["motion"]["pos_local"] = new_pos_local
+            segment_data["motion"]["rot_local_euler"] = new_rot_local_euler
+            segment_data["frame_rate"] = target_fps
+
+            if "times" in segment_data["motion"]:
+                del segment_data["motion"]["times"]
+
+            resampled_segments.append(segment_data)
+
+        return resampled_segments
+
+    # -------------------------------------------------------------------------------------------------
+    # Utility: Timestamp Resampling for NPZ
+    # -------------------------------------------------------------------------------------------------
+
+    @staticmethod
+    def resample_npz_mocap_data(np_data, target_fps, time_ranges, parents, children, joints=None):
+        pos_local_times = np_data["/mocap/0/joint/pos_local_timestamps"]
+        pos_local_values = np_data["/mocap/0/joint/pos_local_values"]
+        rot_local_times = np_data["/mocap/0/joint/rot_local_timestamps"]
+        rot_local_values = np_data["/mocap/0/joint/rot_local_values"]
+        pos_world_times = np_data["/mocap/0/joint/pos_world_timestamps"]
+        pos_world_values = np_data["/mocap/0/joint/pos_world_values"]
+        rot_world_times = np_data["/mocap/0/joint/rot_world_timestamps"]
+        rot_world_values = np_data["/mocap/0/joint/rot_world_values"]
+
+        num_joints = pos_local_values.shape[1] // 3
+
+        pos_local = pos_local_values.reshape((-1, num_joints, 3)).astype(np.float32)
+        rot_local = rot_local_values.reshape((-1, num_joints, 4)).astype(np.float32)
+        pos_world = pos_world_values.reshape((-1, num_joints, 3)).astype(np.float32)
+        rot_world = rot_world_values.reshape((-1, num_joints, 4)).astype(np.float32)
+
+        rot_local = rot_np.normalize(rot_np.fix_continuity(rot_local))
+        rot_world = rot_np.normalize(rot_np.fix_continuity(rot_world))
+
+        if joints is None:
+            joints = [f"joint_{j}" for j in range(num_joints)]
+
+        if time_ranges is None:
+            start_time = float(max(pos_local_times[0], rot_local_times[0], pos_world_times[0], rot_world_times[0]))
+            end_time = float(min(pos_local_times[-1], rot_local_times[-1], pos_world_times[-1], rot_world_times[-1]))
+            time_ranges = [[start_time, end_time]]
+
+        resampled_segments = []
+
+        for start_time, end_time in time_ranges:
+            target_times = np.arange(start_time, end_time, 1.0 / target_fps, dtype=np.float32)
+            if len(target_times) < 2:
+                continue
+
+            new_pos_local = Mocap_Tools.interp_vectors(pos_local_times, pos_local, target_times)
+            new_rot_local = Mocap_Tools.interp_vectors(rot_local_times, rot_local, target_times)
+            new_pos_world = Mocap_Tools.interp_vectors(pos_world_times, pos_world, target_times)
+            new_rot_world = Mocap_Tools.interp_vectors(rot_world_times, rot_world, target_times)
+
+            new_rot_local = rot_np.normalize(new_rot_local)
+            new_rot_world = rot_np.normalize(new_rot_world)
+
+            offsets = np.zeros((num_joints, 3), dtype=np.float32)
+            for j_idx in range(num_joints):
+                parent_idx = parents[j_idx]
+                if parent_idx == -1:
+                    offsets[j_idx] = 0.0
+                else:
+                    bone_world = new_pos_world[0, j_idx] - new_pos_world[0, parent_idx]
+                    parent_rot_world = new_rot_world[0, parent_idx:parent_idx + 1]
+                    offsets[j_idx] = rot_np.rot(rot_np.conj(parent_rot_world), bone_world.reshape(1, 3))[0]
+
+            segment_data = {
+                "frame_rate": target_fps,
+                "rot_sequence": [0, 1, 2],
+                "skeleton": {
+                    "offsets": offsets,
+                    "parents": parents,
+                    "children": children,
+                    "joints": joints
+                },
+                "motion": {
+                    "pos_local": new_pos_local,
+                    "rot_local": new_rot_local
+                }
+            }
+            resampled_segments.append(segment_data)
+
+        return resampled_segments
+
     def _create_skeleton_data(self, bvh_data, mocap_data):
         
         skeleton_data = {}
