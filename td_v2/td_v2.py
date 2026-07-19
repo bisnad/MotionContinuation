@@ -132,8 +132,8 @@ decoder_weights_file = "results_Stocos_XSens_Embodied_Machine_v2_3/weights/decod
 # Render Settings
 # -------------------------------------------------------------------------------------------------
 
-view_ele = 90.0
-view_azi = -90.0
+view_ele = 15.0
+view_azi = 45.0
 view_line_width = 1.0
 view_size = 4.0
 

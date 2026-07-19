@@ -16,18 +16,15 @@ class PoseRenderer:
         @return a numpy 3D array of RGBA values
         """
         # draw the renderer
-        fig.canvas.draw ( )
+        fig.canvas.draw()
  
         # Get the RGBA buffer from the figure
-        w,h = fig.canvas.get_width_height()
+        w, h = fig.canvas.get_width_height()
         
-        #print("w ", w, " h ", h)
-        
-        buf = np.fromstring ( fig.canvas.tostring_argb(), dtype=np.uint8 )
-        buf.shape = ( w, h,4 )
+        # FIXED: replaced deprecated np.fromstring with np.frombuffer, and tostring_argb with buffer_rgba
+        buf = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8)
+        buf.shape = (w, h, 4)
  
-        # canvas.tostring_argb give pixmap in ARGB mode. Roll the ALPHA channel to have it in RGBA mode
-        buf = np.roll ( buf, 3, axis = 2 )
         return buf
     
     def _fig2img (self, fig):
@@ -37,10 +34,11 @@ class PoseRenderer:
         @return a Python Imaging Library ( PIL ) image
         """
         # put the figure pixmap into a numpy array
-        buf = self._fig2data ( fig )
+        buf = self._fig2data(fig)
         w, h, d = buf.shape
         
-        return Image.frombuffer( "RGBA", ( w ,h ), buf.tostring( ) )
+        # FIXED: replaced deprecated tostring() with tobytes()
+        return Image.frombytes("RGBA", (w, h), buf.tobytes())
     
     def create_pose_image(self, pose, axis_min, axis_max, rot_elev, rot_azi, line_width, image_xinch, image_yinch):
         point_data = np.array([pose[:,0], pose[:,1], pose[:,2]])
@@ -50,35 +48,37 @@ class PoseRenderer:
         plt.axis("off")
         fig.tight_layout()
             
-        ax = plt.axes(projection="3d")
+        ax = fig.add_subplot(111, projection='3d')
         ax.view_init(elev=rot_elev, azim=rot_azi)
         
+        # Matplotlib 3.3+ prefers set_box_aspect to maintain equal scaling
+        try:
+            ax.set_box_aspect((np.ptp(ax.get_xlim()), np.ptp(ax.get_ylim()), np.ptp(ax.get_zlim())))
+        except AttributeError:
+            pass
+
         ax.set_xlim(axis_min[0], axis_max[0])
         ax.set_ylim(axis_min[1], axis_max[1])
         ax.set_zlim(axis_min[2], axis_max[2])
             
         # Make panes transparent
-        ax.xaxis.pane.fill = False # Left pane
-        ax.yaxis.pane.fill = False # Right pane
-        ax.zaxis.pane.fill = False # Right pane
+        ax.xaxis.pane.fill = False
+        ax.yaxis.pane.fill = False
+        ax.zaxis.pane.fill = False
             
-        ax.grid(False) # Remove grid lines
+        ax.grid(False)
             
-        # Remove tick labels
         ax.set_xticklabels([])
         ax.set_yticklabels([])
         ax.set_zticklabels([])
             
-        # Transparent spines
         ax.xaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
         ax.yaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
         ax.zaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
             
-        # Transparent panes
         ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
         ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
             
-        # No ticks
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_zticks([])
@@ -87,10 +87,7 @@ class PoseRenderer:
             ax.plot(line[:,0], line[:,1], zs=line[:,2], linewidth=line_width, color='cadetblue', alpha=0.5)
             ax.scatter(point_data[0, :], point_data[1, :], point_data[2, :], s=line_width * 8, color='darkslateblue', alpha=0.5)
     
-        fig.show()
-    
-        pose_image = self._fig2img ( fig )
-    
+        pose_image = self._fig2img(fig)
         plt.close()
         
         return pose_image
@@ -103,56 +100,47 @@ class PoseRenderer:
         plt.axis("off")
         fig.tight_layout()
         
-        ax = plt.axes(projection="3d")
+        ax = fig.add_subplot(111, projection='3d')
         ax.view_init(elev=rot_elev, azim=rot_azi)
+
+        try:
+            ax.set_box_aspect((np.ptp(ax.get_xlim()), np.ptp(ax.get_ylim()), np.ptp(ax.get_zlim())))
+        except AttributeError:
+            pass
         
         ax.set_xlim(axis_min[0], axis_max[0])
         ax.set_ylim(axis_min[1], axis_max[1])
         ax.set_zlim(axis_min[2], axis_max[2])
         
-        # Make panes transparent
-        ax.xaxis.pane.fill = False # Left pane
-        ax.yaxis.pane.fill = False # Right pane
-        ax.zaxis.pane.fill = False # Right pane
+        ax.xaxis.pane.fill = False
+        ax.yaxis.pane.fill = False
+        ax.zaxis.pane.fill = False
         
-        ax.grid(False) # Remove grid lines
+        ax.grid(False)
         
-        # Remove tick labels
         ax.set_xticklabels([])
         ax.set_yticklabels([])
         ax.set_zticklabels([])
         
-        # Transparent spines
         ax.xaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
         ax.yaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
         ax.zaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
         
-        # Transparent panes
         ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
         ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
         
-        # No ticks
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_zticks([])
         
         scatter_data = None
         
-        fig.show()
-        
         for pI in range(pose_count):
-            
-            # cleanup previous drawing
             if scatter_data != None:
                 scatter_data.remove()
 
             for line in list(ax.lines):
                 line.remove()
-
-            """
-            if len(ax.lines) > 0:
-                ax.lines.clear()
-            """
             
             point_data = np.array([poses[pI, :,0], poses[pI, :,1], poses[pI,:,2]])
             lines_data = np.array([[poses[pI, edge[0],:], poses[pI, edge[1],:]] for edge in self.edge_data])
@@ -161,12 +149,10 @@ class PoseRenderer:
                 ax.plot(line[:,0], line[:,1], zs=line[:,2], linewidth=line_width, color='cadetblue', alpha=0.5)
             scatter_data = ax.scatter(point_data[0, :], point_data[1, :], point_data[2, :], s=line_width*8.0, color='darkslateblue', alpha=0.5)
 
-            im = self._fig2img ( fig )
-            
+            im = self._fig2img(fig)
             pose_images.append(im)
     
         plt.close()
-            
         return pose_images
  
     def create_grid_image(self, images, grid):
@@ -174,7 +160,6 @@ class PoseRenderer:
         v_count = grid[1]
 
         fig = plt.figure(figsize=(h_count * 2, v_count * 2))
-
         image_count = h_count * v_count
 
         for iI in range(image_count):
@@ -187,12 +172,7 @@ class PoseRenderer:
             ax.set_xticks([])
             ax.set_yticks([])
             fig.tight_layout()
-
-        fig.show()
     
-        grid_image = self._fig2img ( fig )
-    
+        grid_image = self._fig2img(fig)
         plt.close()
-        
         return grid_image
-    
