@@ -405,18 +405,19 @@ mdn_loss_weights_t = torch.tensor(mdn_loss_weights, dtype=torch.float32).view(1,
 
 def forward_kinematics(rotation_matrices, root_positions):
     t_offsets = torch.tensor(offsets).to(device)
+    # Shape: (Batch, Time, Joints, 3)
     expanded_offsets = t_offsets.expand(
         rotation_matrices.shape[0], 
         rotation_matrices.shape[1], 
         offsets.shape[0], 
         offsets.shape[1]
-    ).unsqueeze(-1)
+    )
     
     num_joints = offsets.shape[0]
     positions_world = [None] * num_joints
     rotations_world = [None] * num_joints
     
-    # Iterate using the safe topological order instead of sequential range
+    # Iterate using the safe topological order
     for jI in execution_order:
         if parents[jI] == -1:
             positions_world[jI] = root_positions
@@ -427,17 +428,25 @@ def forward_kinematics(rotation_matrices, root_positions):
             parent_pos = positions_world[parent_idx]
             
             local_offset = expanded_offsets[:, :, jI]
-            rotated_offset = torch.matmul(parent_rot, local_offset).squeeze(-1)
+            
+            # Row-Major Matrix Multiplication for Vectors
+            # v_rotated = v * R  --> PyTorch syntax: (B, T, 1, 3) @ (B, T, 3, 3)
+            local_offset_row = local_offset.unsqueeze(2) 
+            rotated_offset = torch.matmul(local_offset_row, parent_rot).squeeze(2)
             
             positions_world[jI] = rotated_offset + parent_pos
 
             if len(children[jI]) > 0:
-                new_world_rot = torch.matmul(parent_rot, rotation_matrices[:, :, jI])
+                # Row-Major Matrix Multiplication for Rotations
+                # R_world = R_local * R_parent
+                local_rot = rotation_matrices[:, :, jI]
+                new_world_rot = torch.matmul(local_rot, parent_rot)
                 rotations_world[jI] = new_world_rot
             else:
                 rotations_world[jI] = parent_rot
                 
-    return torch.stack(positions_world, dim=3).permute(0, 1, 3, 2)
+    # Stack along joint dimension
+    return torch.stack(positions_world, dim=2)
 
 def pos_loss(y, yhat):
     if train_root_trajectory:
