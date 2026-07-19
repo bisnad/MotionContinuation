@@ -747,35 +747,23 @@ def export_sequence_anim(pose_sequence, file_name):
         root_trajectory = np.zeros((pose_count, 3), dtype=np.float32)
         rot_sequence = pose_sequence
 
-    # 1. Convert 6D back to Quats using the EXACT SAME path as the FBX exporter
+    # 1. BYPASS QUATERNIONS ENTIRELY to avoid version mismatches
+    # We use the direct 6D -> Matrix converter which we know works perfectly.
     rot_seq_6d = np.reshape(rot_sequence, (pose_count, joint_count, 6))
-    rot_quat = rot_np.r6d_to_quat(rot_seq_6d)
+    rot_seq_tensor = torch.tensor(rot_seq_6d).to(device).unsqueeze(0)
+    root_traj_tensor = torch.tensor(root_trajectory).to(device).unsqueeze(0)
 
-    # 2. Build pos_local (repeat offsets for all frames, insert root trajectory)
-    pos_local = np.repeat(np.expand_dims(offsets, axis=0), pose_count, axis=0)
-    if train_root_trajectory: 
-        pos_local[:, 0, :] = root_trajectory
+    # 2. Use Native PyTorch FK (Guaranteed Uncrumpled!)
+    rot_matrices = custom_r6d_to_mat(rot_seq_tensor)
+    skel_sequence = forward_kinematics(rot_matrices, root_traj_tensor)
+    skel_sequence_vis = skel_sequence.detach().cpu().numpy().squeeze(0)
 
-    # 3. Compute 3D points using the exact same FK logic the FBX viewer uses
-    pos_world, _ = mocap_tools.local_to_world(rot_quat, pos_local, mocap_data["skeleton"])
-
-    # 4. Handle Matplotlib's Coordinate System Handedness & Orientation
-    # Step A: Pitch -90 degrees around X to make Y-Down become Z-Up
-    theta = np.radians(-90.0)
-    cos_t, sin_t = np.cos(theta), np.sin(theta)
-    rot_x_mat = np.array([
-        [1.0, 0.0, 0.0],
-        [0.0, cos_t, -sin_t],
-        [0.0, sin_t, cos_t]
-    ], dtype=np.float32)
-    
-    skel_sequence_vis = np.dot(pos_world, rot_x_mat.T)
-    
-    # Step B: Mirror the X-axis to fix Left-Handed vs Right-Handed inversion!
-    # (If using standard BVH instead of NPZ/MediaPipe in the future, you can toggle this off)
+    # 3. Fix Matplotlib Handedness
+    # Matplotlib is strictly Right-Handed. Mocap data is often Left-Handed.
+    # Mirroring the X-axis fixes the "knees bending backwards" illusion!
     skel_sequence_vis[..., 0] *= -1.0 
-
-    # 5. Render
+    
+    # 4. Render
     view_min, view_max = utils.get_equal_mix_max_positions(skel_sequence_vis)
     skel_images = poseRenderer.create_pose_images(
         skel_sequence_vis, 
