@@ -754,7 +754,8 @@ def export_sequence_anim(pose_sequence, file_name):
     root_traj_tensor = torch.tensor(root_trajectory).to(device).unsqueeze(0)
 
     # 2. Use Native PyTorch FK (Guaranteed Uncrumpled!)
-    rot_matrices = custom_r6d_to_mat(rot_seq_tensor)
+    # Replaced the missing 'custom_r6d_to_mat' with the fixed native 'rot_to.r6d_to_mat'
+    rot_matrices = rot_to.r6d_to_mat(rot_seq_tensor)
     skel_sequence = forward_kinematics(rot_matrices, root_traj_tensor)
     skel_sequence_vis = skel_sequence.detach().cpu().numpy().squeeze(0)
 
