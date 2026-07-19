@@ -132,8 +132,8 @@ decoder_weights_file = "results_Stocos_XSens_Embodied_Machine_v2_3/weights/decod
 # Render Settings
 # -------------------------------------------------------------------------------------------------
 
-view_ele = 15.0
-view_azi = 45.0
+view_ele = 90.0
+view_azi = -90.0
 view_line_width = 1.0
 view_size = 4.0
 
@@ -739,6 +739,7 @@ def plot_training_history(loss_history, file_name):
 
 def export_sequence_anim(pose_sequence, file_name):
     pose_count = pose_sequence.shape[0]
+    
     if train_root_trajectory:
         root_trajectory = pose_sequence[:, :3]
         rot_sequence = pose_sequence[:, 3:]
@@ -746,17 +747,54 @@ def export_sequence_anim(pose_sequence, file_name):
         root_trajectory = np.zeros((pose_count, 3), dtype=np.float32)
         rot_sequence = pose_sequence
 
-    rot_sequence = np.reshape(rot_sequence, (pose_count, joint_count, 6))
-    rot_sequence_tensor = torch.tensor(np.expand_dims(rot_sequence, axis=0)).to(device)
-    rot_matrices = rot_to.r6d_to_mat(rot_sequence_tensor)
+    # 1. Convert 6D back to Quats using the EXACT SAME path as the FBX exporter
+    rot_seq_6d = np.reshape(rot_sequence, (pose_count, joint_count, 6))
+    rot_quat = rot_np.r6d_to_quat(rot_seq_6d)
 
-    root_trajectory = torch.tensor(np.expand_dims(root_trajectory, axis=0)).to(device)
-    skel_sequence = forward_kinematics(rot_matrices, root_trajectory)
-    skel_sequence = skel_sequence.detach().cpu().numpy().squeeze()
+    # 2. Build pos_local (repeat offsets for all frames, insert root trajectory)
+    pos_local = np.repeat(np.expand_dims(offsets, axis=0), pose_count, axis=0)
+    if train_root_trajectory: 
+        pos_local[:, 0, :] = root_trajectory
 
-    view_min, view_max = utils.get_equal_mix_max_positions(skel_sequence)
-    skel_images = poseRenderer.create_pose_images(skel_sequence, view_min, view_max, view_ele, view_azi, view_line_width, view_size, view_size)
-    skel_images[0].save(file_name, save_all=True, append_images=skel_images[1:], optimize=False, duration=33.0, loop=0)
+    # 3. Compute 3D points using the exact same FK logic the FBX viewer uses
+    pos_world, _ = mocap_tools.local_to_world(rot_quat, pos_local, mocap_data["skeleton"])
+
+    # 4. Handle Matplotlib's Coordinate System Handedness & Orientation
+    # Step A: Pitch -90 degrees around X to make Y-Down become Z-Up
+    theta = np.radians(-90.0)
+    cos_t, sin_t = np.cos(theta), np.sin(theta)
+    rot_x_mat = np.array([
+        [1.0, 0.0, 0.0],
+        [0.0, cos_t, -sin_t],
+        [0.0, sin_t, cos_t]
+    ], dtype=np.float32)
+    
+    skel_sequence_vis = np.dot(pos_world, rot_x_mat.T)
+    
+    # Step B: Mirror the X-axis to fix Left-Handed vs Right-Handed inversion!
+    # (If using standard BVH instead of NPZ/MediaPipe in the future, you can toggle this off)
+    skel_sequence_vis[..., 0] *= -1.0 
+
+    # 5. Render
+    view_min, view_max = utils.get_equal_mix_max_positions(skel_sequence_vis)
+    skel_images = poseRenderer.create_pose_images(
+        skel_sequence_vis, 
+        view_min, 
+        view_max, 
+        view_ele, 
+        view_azi, 
+        view_line_width, 
+        view_size, 
+        view_size
+    )
+    skel_images[0].save(
+        file_name, 
+        save_all=True, 
+        append_images=skel_images[1:], 
+        optimize=False, 
+        duration=33.0, 
+        loop=0
+    )
 
 def export_sequence_bvh(pose_sequence, file_name):
     pose_count = pose_sequence.shape[0]
