@@ -57,3 +57,12 @@ rnn/common/__pycache__/quaternion.cpython-310.pyc
 /td_v2/.spyproject
 /td_v2/results_Muriel_Take1_double_Bind_bvh
 /td_v2/results_Yurika_MotionClasses_Mediapipe_npz
+/td_interactive_target_pos_conditioning_v3/.spyproject
+/td_interactive_target_pos_conditioning_v3/__pycache__
+/td_interactive_target_pos_conditioning_v3/common/__pycache__
+/td_interactive_v3/.spyproject
+/td_interactive_v3/__pycache__
+/td_interactive_v3/common/__pycache__
+/td_v2/results_Muriel_Take1_double_Bind_poscond_bvh
+/td_v2/results_Muriel_Take1_double_Bind_poscond_fbx
+/td_v2/results_Yurika_MotionClasses_Mediapipe_poscond_npz
