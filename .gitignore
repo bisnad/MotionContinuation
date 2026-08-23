@@ -66,3 +66,6 @@ rnn/common/__pycache__/quaternion.cpython-310.pyc
 /td_v2/results_Muriel_Take1_double_Bind_poscond_bvh
 /td_v2/results_Muriel_Take1_double_Bind_poscond_fbx
 /td_v2/results_Yurika_MotionClasses_Mediapipe_poscond_npz
+/td_interactive_v3_live/.spyproject
+/td_interactive_v3_live/__pycache__
+/td_interactive_v3_live/common/__pycache__

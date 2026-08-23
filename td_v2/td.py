@@ -64,6 +64,7 @@ mocap_pos_scale = 1.0
 mocap_fps = 50
 """
 
+"""
 # Example 3: NPZ
 mocap_file_path = "E:/data/mocap/Yurika/Mediapipe_v2/All/"
 mocap_files = ["Yurika_Everyday_Mediapipe_realtime.npz", "Yurika_Geometry_Mediapipe_realtime.npz", "Yurika_Rythm_Mediapipe_realtime.npz"]
@@ -71,7 +72,15 @@ mocap_valid_time_ranges = [ [ [ 3.0, 81.0 ] ], [ [ 2.0, 83.0 ] ], [ [ 3.0, 82.0 
 mocap_topology_files = [ "data/configs/Mediapipe_config.json", "data/configs/Mediapipe_config.json", "data/configs/Mediapipe_config.json"] # only used for .npz files
 mocap_pos_scale = 100.0
 mocap_fps = 30
+"""
 
+# Example 3: NPZ
+mocap_file_path = "../../../Data/Mocap/Xsens/Stocos/Solos/npz_60hz/"
+mocap_files = ["Muriel_Take1_double_Bind.npz"]
+mocap_valid_time_ranges = [ [ [ 10.6, 338.0 ] ] ] # in seconds
+mocap_topology_files = [ "data/configs/XSensLive_config.json"] # only used for .npz files
+mocap_pos_scale = 100.0
+mocap_fps = 60
 
 """
 # Example 3: NPZ
@@ -84,13 +93,13 @@ mocap_fps = 50
 """
 
 mocap_loss_weights_file = None
-train_root_trajectory = True
+train_root_trajectory = False
 
 # -------------------------------------------------------------------------------------------------
 # Save Paths Settings
 # -------------------------------------------------------------------------------------------------
 
-save_path = "results_Yurika_MotionClasses_Mediapipe_npz/"
+save_path = "results_Muriel_Take1_DoubleBind_npz/"
 save_weights_path = save_path + "weights/"
 save_history_path = save_path + "history/"
 save_anims_path = save_path + "anims/"
@@ -104,7 +113,7 @@ os.makedirs(save_anims_path, exist_ok=True)
 # Model Settings
 # -------------------------------------------------------------------------------------------------
 
-mdn_num_mixtures = 4
+mdn_num_mixtures = 20
 decoder_layer_count = 6 
 decoder_head_count = 8
 decoder_embed_dim = 512 
@@ -115,7 +124,7 @@ decoder_dropout = 0.1
 # Training Settings
 # -------------------------------------------------------------------------------------------------
 
-batch_size = 64
+batch_size = 128
 test_percentage = 0.1
 
 seq_input_length = 64
@@ -131,7 +140,7 @@ nll_loss_scale = 1.0
 teacher_forcing_prob = 0.5 # 0.0
 model_save_interval = 50
 
-epochs = 200
+epochs = 400
 save_history = True
 
 save_weights = True
