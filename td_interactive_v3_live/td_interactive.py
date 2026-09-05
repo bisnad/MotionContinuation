@@ -52,6 +52,7 @@ mocap_pos_scale = 1.0
 mocap_fps = 50
 """
 
+"""
 # Example 3: NPZ
 mocap_file_path = "E:/data/mocap/Yurika/Mediapipe_v2/All/"
 mocap_files = ["Yurika_Everyday_Mediapipe_realtime.npz", "Yurika_Geometry_Mediapipe_realtime.npz", "Yurika_Rythm_Mediapipe_realtime.npz"]
@@ -59,14 +60,23 @@ mocap_topology_files = [ "data/configs/Mediapipe_config.json", "data/configs/Med
 mocap_valid_time_ranges = [None for _ in mocap_files]
 mocap_pos_scale = 100.0
 mocap_fps = 30
+"""
 
-train_root_trajectory = True
+# Example 3: NPZ
+mocap_file_path = "../../../Data/Mocap/Xsens/Stocos/Solos/npz_60hz/"
+mocap_files = ["Muriel_Take1_double_Bind.npz"]
+mocap_topology_files = [ "data/configs/XSensLive_config.json"] # only used for .npz files
+mocap_valid_time_ranges = [ [ [ 10.6, 338.0 ] ] ]
+mocap_pos_scale = 100.0
+mocap_fps = 60
+
+train_root_trajectory = False
 
 # -------------------------------------------------------------------------------------------------
 # Model Settings
 # -------------------------------------------------------------------------------------------------
 
-mdn_num_mixtures = 4
+mdn_num_mixtures = 20
 decoder_layer_count = 6
 decoder_head_count = 8
 decoder_embed_dim = 512
@@ -76,7 +86,9 @@ sequence_length = 64
 
 #decoder_weights_file = "../td_v2/results_Muriel_Take1_double_Bind_fbx/weights/decoder_weights_epoch_200.pt"
 #decoder_weights_file = "../td_v2/results_Muriel_Take1_double_Bind_bvh/weights/decoder_weights_epoch_200.pt"
-decoder_weights_file = "../td_v2/results_Yurika_MotionClasses_Mediapipe_npz/weights/decoder_weights_epoch_200.pt"
+#decoder_weights_file = "../td_v2/results_Yurika_MotionClasses_Mediapipe_npz/weights/decoder_weights_epoch_200.pt"
+decoder_weights_file = "../td_v2/results_Muriel_Take1_DoubleBind_npz/weights/decoder_weights_epoch_400.pt"
+
 
 gaussian_temp = 0.2
 pi_temperature = 1.5
